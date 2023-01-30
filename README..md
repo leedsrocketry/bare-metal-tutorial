@@ -1,77 +1,131 @@
-# Bare-metal tutorial
-A bare-metal tutorial for STM32L4R5ZI-P adapted from [here](https://github.com/cpq/bare-metal-programming-guide). NOTE: this tutorial was completed using a Windows machine.
+# A bare metal programming guide
 
-The guide covers the following topics: memory and registers, interrupt vector table, startup code, linker script, build automation using make, GPIO peripheral and LED blinky, SysTick timer, UART peripheral and debug output, printf redirect to UART (IO retargeting), debugging with Segger Ozone and system clock setup. 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://opensource.org/licenses/MIT)
+[![Build Status]( https://github.com/cpq/bare-metal-programming-guide/workflows/build/badge.svg)](https://github.com/cpq/bare-metal-programming-guide/actions)
 
-Every chapter in this guide comes with a complete source code which gradually progress in functionality and completeness. In this tutorial we'll use the Nucleo-L4R5ZI-P development board, so go ahead and download the "mcu datasheet" and the "board datasheet" for it.
+Translations: English | [中文](README_zh-CN.md)
 
-MCU datasheet: [here](https://www.st.com/resource/en/reference_manual/rm0432-stm32l4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
-Board datasheet: [here](https://www.st.com/resource/en/user_manual/um2179-stm32-nucleo144-boards-mb1312-stmicroelectronics.pdf)
-Arm Processor Reference Manual: [here](file:///C:/Users/Alex/Downloads/arm_cortexm4_processor_trm_100166_0001_04_en.pdf)
-Pins Alternative Functions: [here](https://web.eece.maine.edu/~zhu/book/Appendix_I_Alternate_Functions.pdf) 
+This guide is written for developers who wish to start programming
+microcontrollers using GCC compiler and a datasheet - nothing else! The
+fundamentals explained in this guide, will help you understand better how
+frameworks like Cube, Keil, Arduino - and others, work.
 
-# Tools setup
+The guide covers the following topics: memory and registers, interrupt vector
+table, startup code, linker script, build automation using `make`, GPIO
+peripheral and LED blinky, SysTick timer, UART peripheral and debug output,
+`printf` redirect to UART (IO retargeting), debugging with Segger Ozone,
+system clock setup, and web server implementation with device dashboard.
+
+Throughout the guide, we will be using a
+[Nucleo-F429ZI](https://www.st.com/en/evaluation-tools/nucleo-f429zi.html)
+development board  ([buy on
+Mouser](https://eu.mouser.com/ProductDetail/STMicroelectronics/NUCLEO-F429ZI?qs=mKNKSX85ZJcE6FU0UkiXTA%3D%3D)).
+Every chapter in this guide comes with a complete source code which gradually
+progress in functionality and completeness.  The last (web server) chapter is
+the most complete, and can be used as a skeleton for the project of your own,
+dear reader.  Therefore, that last example project is provided for the other
+boards too. To follow this tutorial, download MCU and dev board datasheets for
+Nucleo-F429ZI.
+
+| Skeleton project | MCU datasheet | Board datasheet | Status |
+| --------- | ---------------- | ------------- | ------------ |
+| [STM32 Nucleo-F429ZI](step-7-webserver/nucleo-f429zi/) | [mcu datasheet](https://www.st.com/resource/en/reference_manual/dm00031020-stm32f405-415-stm32f407-417-stm32f427-437-and-stm32f429-439-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf) | [board datasheet](https//www.st.com/resource/en/user_manual/dm00244518-stm32-nucleo144-boards-mb1137-stmicroelectronics.pdf) | complete |
+| [TI EK-TM4C1294XL](step-7-webserver/ek-tm4c1294xl/) |  [mcu datasheet](https://www.ti.com/lit/ds/symlink/tm4c1294ncpdt.pdf) | [board datasheet](https://www.ti.com/lit/ug/spmu365c/spmu365c.pdf) | complete |
+| [RP2040 Pico-W](step-7-webserver/pico-w/) | [mcu datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf) | [board datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf) | in progress |
+
+Feel free to file an issue to support the board you work with.
+
+## Tools setup
+
 To proceed, the following tools are required:
+
 - ARM GCC, https://launchpad.net/gcc-arm-embedded - for compiling and linking
 - GNU make, http://www.gnu.org/software/make/ - for build automation
 - ST link, https://github.com/stlink-org/stlink - for flashing
 
-## Setup instructions for Windows
-- Download and install gcc-arm-none-eabi-10.3-2021.10-win32.exe. Enable "Add path to environment variable" during the installation
-- Create c:\tools folder
-- Download stlink-1.7.0-x86_64-w64-mingw32.zip and unpack bin/st-flash.exe into c:\tools
-- Download make-4.4-without-guile-w32-bin.zip and unpack bin/make.exe into c:\tools
-- Add c:\tools to the Path environment variable
-- Verify installation:
- - Download and unzip this repository into c:\
- - Start command prompt, and execute the following: 
-```
-C:\Users\YOURNAME> cd \
-C:\> cd bare-metal-programming-guide-main\step-0-minimal
-C:\bare-metal-programming-guide-main\step-0-minimal> make
-arm-none-eabi-gcc main.c  -W -Wall -Wextra -Werror ...
-```
+### Setup instructions for Mac
 
-## Setup instructions for Mac
 Start a terminal, and execute:
-```
+
+```sh
 $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 $ brew install gcc-arm-embedded make stlink
 ```
 
-## Setup instructions for Linux (Ubuntu)
+### Setup instructions for Linux (Ubuntu)
+
 Start a terminal, and execute:
-```
+
+```sh
 $ sudo apt -y update
 $ sudo apt -y install gcc-arm-none-eabi make stlink-tools
 ```
 
-# Introduction
-A microcontroller (uC, or MCU) is a small computer. Typically it has CPU, RAM, flash to 
-store firmware code, and a bunch of pins that stick out. Some pins are used to power the MCU, 
-usually marked as GND (ground) and VCC pins. Other pins are used to communicate with the MCU, 
-by means of high/low voltage applied to those pins. One of the simplest ways of communication 
-is an LED attached to a pin: one LED contact is attached to the ground pin (GND), and another 
-contact is attached to a signal pin via a current-limiting resistor. A firmware code can set high 
-or low voltage on a signal pin, making LED blink.
+### Setup instructions for Windows
+
+- Download and install [gcc-arm-none-eabi-10.3-2021.10-win32.exe](https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-win32.exe?rev=29bb46cfa0434fbda93abb33c1d480e6&hash=3C58D05EA5D32EF127B9E4D13B3244D26188713C). Enable "Add path to environment variable" during the installation
+- Create `c:\tools` folder
+- Download [stlink-1.7.0-x86_64-w64-mingw32.zip](https://github.com/stlink-org/stlink/releases/download/v1.7.0/stlink-1.7.0-x86_64-w64-mingw32.zip) and unpack `bin/st-flash.exe` into `c:\tools`
+- Download [make-4.4-without-guile-w32-bin.zip](https://sourceforge.net/projects/ezwinports/files/make-4.4-without-guile-w32-bin.zip/download) and unpack `bin/make.exe` into `c:\tools`
+- Add `c:\tools` to the `Path` environment variable
+- Verify installation:
+  - Download and unzip [this repository](https://github.com/cpq/bare-metal-programming-guide/archive/refs/heads/main.zip) into `c:\`
+  - Start command prompt, and execute the following:
+  <pre style="color: silver;">
+  C:\Users\YOURNAME> <b style="color: black;">cd \</b>
+  C:\> <b style="color: black;">cd bare-metal-programming-guide-main\step-0-minimal</b>
+  C:\bare-metal-programming-guide-main\step-0-minimal> <b style="color: black;">make</b>
+  arm-none-eabi-gcc main.c  -W -Wall -Wextra -Werror ...
+  </pre>
+
+### Setup instruction for in-browser development (using GitHub Codespaces):
+
+- Click on the "Code" button, select "Codespaces" tab, click on plus icon
+  <img src="images/codespace.png" width="50%" />
+- This repository will be opened in the in-browser editor, with an opened terminal:
+  <img src="images/codespace-terminal.png" width="75%" />
+- Execute Linux/Ubuntu setup instructions in the terminal:
+  ```sh
+  sudo apt -y update
+  sudo apt -y install gcc-arm-none-eabi make stlink-tools
+  ```
+- Verify that the build process works:
+  ```sh
+  cd step-4-printf
+  make firmware.bin
+  ```
+
+## Introduction
+
+A microcontroller (uC, or MCU) is a small computer. Typically it has CPU, RAM,
+flash to store firmware code, and a bunch of pins that stick out. Some pins are
+used to power the MCU, usually marked as GND (ground) and VCC pins. Other pins
+are used to communicate with the MCU, by means of high/low voltage applied to
+those pins. One of the simplest ways of communication is an LED attached to a
+pin: one LED contact is attached to the ground pin (GND), and another contact
+is attached to a signal pin via a current-limiting resistor.  A firmware code
+can set high or low voltage on a signal pin, making LED blink:
 
 <img src="images/mcu.svg" height="200" />
 
-## Memory and registers
-The 32-bit address space of the MCU is divided by regions. For example, some region of memory 
-is mapped to the internal MCU flash at a specific address. Firmware code instructions are read 
-and executed by reading from that memory region. Another region is RAM, which is also mapped to 
-a specific address. We can read and write any values to the RAM region.
+### Memory and registers
 
-From STM32L4R5 datasheet, we can take a look at section 2.2.2 (Figure 3) and learn that RAM 
-region starts at address 0x20000000 and has size of 192KB. From section 2.2.2 (Figure 3) we 
-can learn that flash is mapped at address 0x08000000. Our MCU has 2MB flash.
+The 32-bit address space of the MCU is divided by regions. For example, some
+region of memory is mapped to the internal MCU flash at a specific address.
+Firmware code instructions are read and executed by reading from that memory region. Another region is
+RAM, which is also mapped to a specific address. We can read and write any
+values to the RAM region.
+
+From STM32F429 datasheet, we can take a look at section 2.3.1 and learn
+that RAM region starts at address 0x20000000 and has size of 192KB. From section
+2.4 we can learn that flash is mapped at address 0x08000000. Our MCU has
+2MB flash, so flash and RAM regions are located like this:
 
 <img src="images/mem.svg" />
 
 From the datasheet we can also learn that there are many more memory regions.
-Their address ranges are given in the section 2.2.2 (Table 1) "Memory Map". 
-For example, there is a "GPIOA" region that starts at 0x48000000.
+Their address ranges are given in the section 2.3 "Memory Map". For example,
+there is a "GPIOA" region that starts at 0x40020000 and has length of 1KB.
 
 These memory regions correspond to a different "peripherals" inside the MCU -
 a piece of silicon circuitry that make certain pins behave in a special way.
@@ -92,11 +146,13 @@ There are many other peripherals.
 Often, there are multiple "instances" of the same peripheral, for example
 GPIOA, GPIOB, ... which control different set of MCU pins. Likewise, there
 could be UART1, UART2, ... which allow to implement multiple UART channels.
-On Nucleo-L4R5, there are several GPIO and UART peripherals.
+On Nucleo-F429, there are several GPIO and UART peripherals.
 
-For example, GPIOA peripheral starts at 0x48000000, and we can find GPIO register 
-description in section 8.4.12. The datasheet says that `GPIOA_MODER` register has offset 0, that
-means that it's address is `0x48000000 + 0`, and this is the format of the register:
+For example, GPIOA
+peripheral starts at 0x40020000, and we can find GPIO register description in
+section 8.4. The datasheet says that `GPIOA_MODER` register has offset 0, that
+means that it's address is `0x40020000 + 0`, and this is the format of the
+register:
 
 <img src="images/moder.png" style="max-width: 100%" />
 
@@ -112,7 +168,7 @@ If we write 32-bit value `0` to the register MODER, we'll set all 16 pins,
 from A0 to A15, to input mode:
 
 ```c
-  * (volatile uint32_t *) (0x48000000 + 0) = 0;  // Set A0-A15 to input mode
+  * (volatile uint32_t *) (0x40020000 + 0) = 0;  // Set A0-A15 to input mode
 ```
 
 Note the `volatile` specifier. Its meaning will be covered later.  By setting
@@ -120,8 +176,8 @@ individual bits, we can selectively set specific pins to a desired mode. For
 example, this snippet sets pin A3 to output mode:
 
 ```c
-  * (volatile uint32_t *) (0x48000000 + 0) &= ~(3 << 6);  // CLear bit range 6-7
-  * (volatile uint32_t *) (0x48000000 + 0) |= 1 << 6;     // Set bit range 6-7 to 1
+  * (volatile uint32_t *) (0x40020000 + 0) &= ~(3 << 6);  // CLear bit range 6-7
+  * (volatile uint32_t *) (0x40020000 + 0) |= 1 << 6;     // Set bit range 6-7 to 1
 ```
 
 Let me explain those bit operations. Our goal is to set bits 6-7, which are
@@ -169,13 +225,13 @@ Now, it should be clear to you, dear reader, the meaning of these two lines,
 which set bits 6-7 of the GPIOA MODER register to the value of 1 (output).
 
 ```c
-  * (volatile uint32_t *) (0x48000000 + 0) &= ~(3 << 6);  // CLear bit range 6-7
-  * (volatile uint32_t *) (0x48000000 + 0) |= 1 << 6;     // Set bit range 6-7 to 1
+  * (volatile uint32_t *) (0x40020000 + 0) &= ~(3 << 6);  // CLear bit range 6-7
+  * (volatile uint32_t *) (0x40020000 + 0) |= 1 << 6;     // Set bit range 6-7 to 1
 ```
 
 Some registers are not mapped to the MCU peripherals, but they are mapped to
 the ARM CPU configuration and control. For example, there is a "Reset at clock
-control" unit (RCC), described in section 6.4.34 of the datasheet. It describes
+control" unit (RCC), described in section 6 of the datasheet. It describes
 registers that allow to set systems clock and other things.
 
 ## Human-readable peripherals programming
@@ -185,24 +241,24 @@ register by direct accessing certain memory addresses. Let's look at the
 snippet that sets pin A3 to output mode:
 
 ```c
-  * (volatile uint32_t *) (0x48000000 + 0) &= ~(3 << 6);  // CLear bit range 6-7
-  * (volatile uint32_t *) (0x48000000 + 0) |= 1 << 6;     // Set bit range 6-7 to 1
+  * (volatile uint32_t *) (0x40020000 + 0) &= ~(3 << 6);  // CLear bit range 6-7
+  * (volatile uint32_t *) (0x40020000 + 0) |= 1 << 6;     // Set bit range 6-7 to 1
 ```
 
 That is pretty cryptic. Without extensive comments, such code would be quite
 hard to understand. We can rewrite this code to a much more readable form.  The
 idea is to represent the whole peripheral as a structure that contains 32-bit
 fields. Let's see what registers exist for the GPIO peripheral in the section
-8.4.12 of the datasheet. They are MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR,
-LCKR, AFR, BRR. Their offsets are with offsets 0, 4, 8, etc... . That means we can
+8.4 of the datasheet. They are MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR,
+LCKR, AFR. Their offsets are with offsets 0, 4, 8, etc... . That means we can
 represent them as a structure with 32-bit fields, and make a define for GPIOA:
 
 ```c
 struct gpio {
-  volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR, LCKR, AFR[2], BRR;
+  volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR, LCKR, AFR[2];
 };
 
-#define GPIOA ((struct gpio *) 0x48000000)
+#define GPIOA ((struct gpio *) 0x40020000)
 ```
 
 Then, for setting GPIO pin mode, we can define a function:
@@ -223,8 +279,8 @@ gpio_set_mode(GPIOA, 3 /* pin */, GPIO_MODE_OUTPUT);  // Set A3 to output
 ```
 
 Our MCU has several GPIO peripherals (also called "banks"): A, B, C, ... K.
-From section 2.2.2 (Table 1) we can see that they are 1KB away from each other:
-GPIOA is at address 0x48000000, GPIOB is at 0x48000400, and so on:
+From section 2.3 we can see that they are 1KB away from each other:
+GPIOA is at address 0x40020000, GPIOB is at 0x40020400, and so on:
 
 ```c
 #define GPIO(bank) ((struct gpio *) (0x40020000 + 0x400 * (bank)))
@@ -272,7 +328,7 @@ self-explanatory and human readable.
 
 ## MCU boot and vector table
 
-When STM32L4R5 MCU boots, it reads a so-called "vector table" from the
+When STM32F429 MCU boots, it reads a so-called "vector table" from the
 beginning of flash memory. A vector table is a concept common to all ARM MCUs.
 That is a array of 32-bit addresses of interrupt handlers. First 16 entries
 are reserved by ARM and are common to all ARM MCUs. The rest of interrupt
@@ -280,8 +336,8 @@ handlers are specific to the given MCU - these are interrupt handlers for
 peripherals. Simpler MCUs with few peripherals have few interrupt handlers,
 and more complex MCUs have many.
 
-Vector table for STM32L4R5 is documented in Table 76. From there we can learn
-that there are 95 peripheral handlers, in addition to the standard 16.
+Vector table for STM32F429 is documented in Table 62. From there we can learn
+that there are 91 peripheral handlers, in addition to the standard 16.
 
 At this point, we are interested in the first two entries of the vector table,
 because they play a key role in the MCU boot process. Those two first values
@@ -293,11 +349,12 @@ a way that the 2nd 32-bit value in the flash should contain an address of
 out boot function. When MCU boots, it'll read that address from flash, and
 jump to our boot function.
 
+
 ## Minimal firmware
 
 Let's create a file `main.c`, and specify our boot function that initially does
 nothing (falls into infinite loop), and specify a vector table that contains 16
-standard entries and 95 STM32 entries. In your editor of choice, create
+standard entries and 91 STM32 entries. In your editor of choice, create
 `main.c` file and copy/paste the following into `main.c` file:
 
 ```c
@@ -309,7 +366,7 @@ __attribute__((naked, noreturn)) void _reset(void) {
 extern void _estack(void);  // Defined in link.ld
 
 // 16 standard and 91 STM32-specific handlers
-__attribute__((section(".vectors"))) void (*tab[16 + 95])(void) = {
+__attribute__((section(".vectors"))) void (*tab[16 + 91])(void) = {
   _estack, _reset
 };
 ```
@@ -318,7 +375,7 @@ For function `_reset()`, we have used GCC-specific attributes `naked` and
 `noreturn` - they mean, standard function's prologue and epilogue should not
 be created by the compiler, and that function does not return.
 
-The `void (*tab[16 + 95])(void)` expression means: define an array of 16 + 95
+The `void (*tab[16 + 91])(void)` expression means: define an array of 16 + 91
 pointers to functions, that return nothing (void) and take to arguments. Each
 such function is an IRQ handler (Interrupt ReQuest handler). An array of those
 handlers is called a vector table.
@@ -384,6 +441,7 @@ Create a minimal linker script `link.ld`, and copy-paste contents from
 ```
 ENTRY(_reset);
 ```
+
 This line tells the linker the value of the "entry point" attribute in the
 generated ELF header - so this is a duplicate to what a vector table has.  This
 is an aid for a debugger (like Ozone, described below) that helps to set a
@@ -579,8 +637,8 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
             -Wformat-truncation -fno-common -Wconversion \
             -g3 -Os -ffunction-sections -fdata-sections -I. \
             -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(EXTRA_CFLAGS)
-LDFLAGS ?= -T link.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
-SOURCES = main.c  
+LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+SOURCES = main.c 
 
 build: firmware.elf
 
@@ -655,15 +713,14 @@ clean:
 
 A complete project source code you can find in [step-0-minimal](step-0-minimal) folder.
 
-
 ## Blinky LED
 
 Now as we have the whole build / flash infrastructure set up, it is time to
 teach our firmware to do something useful. Something useful is of course blinking
-an LED. A Nucleo-L4R5 board has three built-in LEDs. In a Nucleo board
+an LED. A Nucleo-F429ZI board has three built-in LEDs. In a Nucleo board
 datasheet section 6.5 we can see which pins built-in LEDs are attached to:
 
-- PC7: green LED
+- PB0: green LED
 - PB7: blue LED
 - PB14: red LED
 
@@ -682,9 +739,9 @@ discussed earlier. Note we also add a convenience macro `BIT(position)`:
 #define PINBANK(pin) (pin >> 8)
 
 struct gpio {
-  volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR, LCKR, AFR[2], BRR;
+  volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR, LCKR, AFR[2];
 };
-#define GPIO(bank) ((struct gpio *) (0x48000000 + 0x400 * (bank)))
+#define GPIO(bank) ((struct gpio *) (0x40020000 + 0x400 * (bank)))
 
 // Enum values are per datasheet: 0, 1, 2, 3
 enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
@@ -693,7 +750,7 @@ static inline void gpio_set_mode(uint16_t pin, uint8_t mode) {
   struct gpio *gpio = GPIO(PINBANK(pin));  // GPIO bank
   int n = PINNO(pin);                      // Pin number
   gpio->MODER &= ~(3U << (n * 2));         // Clear existing setting
-  gpio->MODER |= (mode & 3U) << (n * 2);   // Set new mode
+  gpio->MODER |= (mode & 3) << (n * 2);    // Set new mode
 }
 ```
 
@@ -701,7 +758,7 @@ Some microcontrollers, when they are powered, have all their peripherals
 powered and enabled, automatically. STM32 MCUs, however, by default have their
 peripherals disabled in order to save power. In order to enable a GPIO peripheral,
 it should be enabled (clocked) via the RCC (Reset and Clock Control) unit.
-In the datasheet section 6.4.17 we find that the AHB2ENR (AHB2 peripheral
+In the datasheet section 7.3.10 we find that the AHB1ENR (AHB1 peripheral
 clock enable register) is responsible to turn GPIO banks on or off. First we
 add a definition for the whole RCC unit:
 
@@ -716,13 +773,13 @@ struct rcc {
 #define RCC ((struct rcc *) 0x40023800)
 ```
 
-In the AHB2ENR register documentation we see that bits from 0 to 8 inclusive
+In the AHB1ENR register documentation we see that bits from 0 to 8 inclusive
 set the clock for GPIO banks GPIOA - GPIOE:
 
 ```c
 int main(void) {
   uint16_t led = PIN('B', 7);            // Blue LED
-  RCC->AHB2ENR |= BIT(PINBANK(led));     // Enable GPIO clock for LED
+  RCC->AHB1ENR |= BIT(PINBANK(led));     // Enable GPIO clock for LED
   gpio_set_mode(led, GPIO_MODE_OUTPUT);  // Set blue LED to output mode
   for (;;) asm volatile("nop");          // Infinite loop
   return 0;
@@ -767,22 +824,21 @@ Finally, we're ready to modify our main loop to implement LED blinking:
 Run `make flash` and enjoy blue LED flashing.
 A complete project source code you can find in [step-1-blinky](step-1-blinky).
 
-
 ## Blinky with SysTick interrupt
 
 In order to implement an accurate time keeping, we should enable ARM's SysTick
 interrupt. SysTick a 24-bit hardware counter, and is part of ARM core,
-therefore it is documented by the ARM datasheet. Looking at the reference manual,
-4.1 System control registers, Table 4-1, we see that SysTick has four registers:
+therefore it is documented by the ARM datasheet. Looking at the datasheet, we
+see that SysTick has four registers:
 
-- STCSR - used to enable/disable systick (status register)
-- STRVR - an initial counter value (reload value)
-- STCVR - a current counter value, decremented on each clock cycle
-- STCR - calibration register
+- CTRL - used to enable/disable systick
+- LOAD - an initial counter value
+- VAL - a current counter value, decremented on each clock cycle
+- CALIB - calibration register
 
-Every time STCVR drops to zero, a SysTick interrupt is generated. The SysTick
+Every time VAL drops to zero, a SysTick interrupt is generated. The SysTick
 interrupt index in the vector table is 15, so we need to set it. Upon boot,
-our board Nucleo-L4R5ZI-P runs at 4Mhz. We can configure the SysTick counter
+our board Nucleo-F429ZI runs at 16Mhz. We can configure the SysTick counter
 to trigger interrupt each millisecond.
 
 First, let's define a SysTick peripheral. We know 4 registers, and from the
@@ -790,28 +846,28 @@ datasheet we can learn that the SysTick address is 0xe000e010. So:
 
 ```c
 struct systick {
-  volatile uint32_t STCSR, STRVR, STCVR, STCR;
+  volatile uint32_t CTRL, LOAD, VAL, CALIB;
 };
 #define SYSTICK ((struct systick *) 0xe000e010)
 ```
 
 Next, add an API function that configures it. We need to enable SysTick
-in the `SYSTICK->STRVR` register, and also we must clock it via the
-`RCC->APB2ENR`:
+in the `SYSTICK->CTRL` register, and also we must clock it via the
+`RCC->APB2ENR`, described in the section 7.4.14:
 
 ```c
 #define BIT(x) (1UL << (x))
 static inline void systick_init(uint32_t ticks) {
-  if ((ticks - 1) > 0xffffff) return;         // Systick timer is 24 bit
-  SYSTICK->STRVR = ticks - 1;
-  SYSTICK->STCVR = 0;
-  SYSTICK->STCSR = BIT(0) | BIT(1) | BIT(2);  // Enable systick
-  RCC->APB2ENR |= BIT(14);                    // Enable SYSCFG
+  if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
+  SYSTICK->LOAD = ticks - 1;
+  SYSTICK->VAL = 0;
+  SYSTICK->CTRL = BIT(0) | BIT(1) | BIT(2);  // Enable systick
+  RCC->APB2ENR |= BIT(14);                   // Enable SYSCFG
 }
 ```
 
-By default, Nucleo-L4R5 board runs at 4Mhz. That means, if we call
-`systick_init(4000000 / 4000);`, then SysTick interrupt will be generated
+By default, Nucleo-F429ZI board runs at 16Mhz. That means, if we call
+`systick_init(16000000 / 1000);`, then SysTick interrupt will be generated
 every millisecond. We should have interrupt handler function defined - here
 it is, we simply increment a 32-bit millisecond counter:
 
@@ -862,8 +918,8 @@ updated by interrupt handlers, or by the hardware, declare as `volatile`**.
 Now we should add `SysTick_Handler()` interrupt handler to the vector table:
 
 ```c
-__attribute__((section(".vectors"))) void (*tab[16 + 95])(void) = {
-    _estack, _reset, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, SysTick_Handler};
+__attribute__((section(".vectors"))) void (*tab[16 + 91])(void) = {
+    0, _reset, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, SysTick_Handler};
 ```
 
 Now we have a precise millisecond clock! Let's create a helper function
@@ -902,28 +958,28 @@ different periods, and they all will be triggered in time.
 
 A complete project source code you can find in [step-2-systick](step-2-systick) folder.
 
-
 ## Add UART debug output
 
 Now it's time to add a human-readable diagnostics to our firmware. One of the
 MCU peripherals is a serial UART interface. Looking at the datasheet section
-2.2, we see that there are several UART/USART controllers - i.e. pieces of
+2.3, we see that there are several UART/USART controllers - i.e. pieces of
 circuitry inside MCU that, properly configured, can exchange data via
 certain pins. A mimimal UART setup uses two pins, RX (receive) and TX (transmit).
 
-One of the controllers, USART3, is using pins PD8 (TX) and PD9 (RX) and is connected to
+In a Nucleo board datasheet section 6.9 we see that one of the
+controllers, USART3, is using pins PD8 (TX) and PD9 (RX) and is connected to
 the on-board ST-LINK debugger. That means that if we configure USART3 and
 output data via the PD9 pin, we can see it on our workstation via the ST-LINK
 USB connection.
 
 Thus, let us create a handy API for the UART, the way we did it for GPIO.
-Datasheet section 50.8.15 summarises UART registers - so here is our UART struct:
+Datasheet section 30.6 summarises UART registers - so here is our UART struct:
 
 ```c
 struct uart {
-  volatile uint32_t CR1, CR2, CR3, BRR, GTPR, RTOR, RQR, ISR, ICR, RDR, TDR, PRESC;
+  volatile uint32_t SR, DR, BRR, CR1, CR2, CR3, GTPR;
 };
-#define UART1 ((struct uart *) 0x40013800)
+#define UART1 ((struct uart *) 0x40011000)
 #define UART2 ((struct uart *) 0x40004400)
 #define UART3 ((struct uart *) 0x40004800)
 ```
@@ -933,8 +989,8 @@ To configure UART, we need to:
 - Set "alternate function" pin mode for RX and TX pins. There can be several
   alternate functions (AF) for any given pin, depending on the peripheral that
   is used. The AF list can be found in the
-  [STM32L4R5](https://web.eece.maine.edu/~zhu/book/Appendix_I_Alternate_Functions.pdf)
-  Appendix 1
+  [STM32F429ZI](https://www.st.com/resource/en/datasheet/stm32f429zi.pdf)
+  table 12
 - Set baud rate (receive/transmit clock frequency) via the BRR register
 - Enable the peripheral, receive and transmit via the CR1 register
 
@@ -961,23 +1017,26 @@ move the GPIO clock init to the `gpio_set_mode()` function:
 static inline void gpio_set_mode(uint16_t pin, uint8_t mode) {
   struct gpio *gpio = GPIO(PINBANK(pin));  // GPIO bank
   int n = PINNO(pin);                      // Pin number
-  RCC->AHB2ENR |= BIT(PINBANK(pin));       // Enable GPIO clock
+  RCC->AHB1ENR |= BIT(PINBANK(pin));       // Enable GPIO clock
   ...
 ```
 
 Now we're ready to create a UART initialization API function:
 
 ```c
-#define FREQ 4000000  // CPU frequency, 4Mhz
+#define FREQ 16000000  // CPU frequency, 16 Mhz
 static inline void uart_init(struct uart *uart, unsigned long baud) {
+  // https://www.st.com/resource/en/datasheet/stm32f429zi.pdf
   uint8_t af = 0;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
 
-  if (uart == UART1) RCC->APB2ENR  |= BIT(14);  // Datasheet STM32L4 page 296
-  if (uart == UART2) RCC->APB1ENR1 |= BIT(17);  // Datasheet STM32L4 page 291
-  if (uart == UART3) RCC->APB1ENR1 |= BIT(18);  // Datasheet STM32L4 page 291
+  if (uart == UART1) RCC->APB2ENR |= BIT(4);
+  if (uart == UART2) RCC->APB1ENR |= BIT(17);
+  if (uart == UART3) RCC->APB1ENR |= BIT(18);
 
-  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); // Nucleo User Manual page 40
+  if (uart == UART1) af = 4, tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == UART2) af = 4, tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9);
 
   gpio_set_mode(tx, GPIO_MODE_AF);
   gpio_set_af(tx, af);
@@ -985,7 +1044,7 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   gpio_set_af(rx, af);
   uart->CR1 = 0;                           // Disable this UART
   uart->BRR = FREQ / baud;                 // FREQ is a CPU frequency 
-  uart->CR1 |= BIT(0) | BIT(2) | BIT(3);  // Set UE, RE, TE
+  uart->CR1 |= BIT(13) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
 ```
 
@@ -994,14 +1053,14 @@ The datasheet section 30.6.1 tells us that the status register SR tells us
 whether data is ready:
 ```c
 static inline int uart_read_ready(struct uart *uart) {
-  return uart->ISR & BIT(5);  // If RXNE bit is set, data is ready Datasheet 50.8.10
+  return uart->SR & BIT(5);  // If RXNE bit is set, data is ready
 }
 ```
 
 The data byte itself can be fetched from the data register DR:
 ```c
 static inline uint8_t uart_read_byte(struct uart *uart) {
-  return (uint8_t) (uart->RDR & 255);
+  return (uint8_t) (uart->DR & 255);
 }
 ```
 
@@ -1010,8 +1069,8 @@ setting a byte to write, we need to wait for the transmission to end, indicated
 via bit 7 in the status register:
 ```c
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
-  uart->RDR = byte;
-  while ((uart->ISR & BIT(7)) == 0) spin(1);    // Datasheet STM32L4 50.8.10 USART status register (USART_ISR) 
+  uart->DR = byte;
+  while ((uart->SR & BIT(7)) == 0) spin(1);
 }
 ```
 
@@ -1026,7 +1085,7 @@ Now, initialise UART in our main() function:
 
 ```c
   ...
-  uart_init(UART3, 9600);              // Initialise UART
+  uart_init(UART3, 115200);              // Initialise UART
 ```
 
 Now, we're ready to print a message "hi\r\n" every time LED blinks!
@@ -1042,7 +1101,7 @@ On my Mac workstation, I use `cu`. It also can be used on Linux. On Windows,
 using `putty` utility can be a good idea. Run a terminal and see the messages:
 
 ```sh
-$ cu -l /dev/cu.YOUR_SERIAL_PORT -s 9600
+$ cu -l /dev/cu.YOUR_SERIAL_PORT -s 115200
 hi
 hi
 ```
@@ -1102,9 +1161,9 @@ void SysTick_Handler(void) {
 
 int main(void) {
   uint16_t led = PIN('B', 7);            // Blue LED
-  systick_init(4000000 / 4000);         // Tick every 1 ms
+  systick_init(16000000 / 1000);         // Tick every 1 ms
   gpio_set_mode(led, GPIO_MODE_OUTPUT);  // Set blue LED to output mode
-  uart_init(UART3, 9600);              // Initialise UART
+  uart_init(UART3, 115200);              // Initialise UART
   uint32_t timer = 0, period = 250;      // Declare timer and 250ms period
   for (;;) {
     if (timer_expired(&timer, period, s_ticks)) {
@@ -1245,10 +1304,9 @@ stuff. One thing that could be noted, is a handy Ozone peripheral view:
 ![](images/ozone6.png)
 
 Using it, we can directly examine or set the state of the peripherals. For
-example, let's turn on a green on-board LED (??):
+example, let's turn on a green on-board LED (PB0):
 
-??
-1. We need to clock GPIOB first. Find Peripherals -> RCC -> AHB2ENR,
+1. We need to clock GPIOB first. Find Peripherals -> RCC -> AHB1ENR,
    and enable GPIOBEN bit - set it to 1:
   <img src="images/ozone7.png" width="75%" />
 2. Find Peripherals -> GPIO -> GPIOB -> MODER, set MODER0 to 1 (output): 
@@ -1257,9 +1315,7 @@ example, let's turn on a green on-board LED (??):
   <img src="images/ozone9.png" width="75%" />
 
 Now, a green LED should be on! Happy debugging.
-??
 
---> ??
 ## Vendor CMSIS headers
 
 In the previous sections, we have developed the firmware using only datasheets,
@@ -1390,3 +1446,220 @@ to let GCC know about it:
 We have left with
 a project template that can be reused for the future projects.
 A complete project source code you can find in [step-5-cmsis](step-5-cmsis)
+
+
+## Setting up clocks
+
+After boot, Nucleo-F429ZI CPU runs at 16MHz. The maximum frequency is 180MHz.
+Note that system clock frequency is not the only factor we need to care about.
+Peripherals are attached to different buses, APB1 and APB2 which are clocked
+differently.  Their clock speeds are configured by the frequency prescaler
+values, set in the RCC. The main CPU clock source can also be
+different - we can use either an external crystal oscillator (HSE) or an
+internal oscillator (HSI). In our case, we'll use HSI.
+
+When CPU executes instructions from flash, a flash read speed (which is around
+25MHz) becomes a bottleneck if CPU clock gets higher. There are several tricks
+that can help. Instruction prefetch is one. Also, we can give a clue to the
+flash controller, how faster the system clock is: that value is called flash
+latency. For 180MHz system clock, the `FLASH_LATENCY` value is 5. Bits 8 and 9
+in the flash controller enable instruction and data caches:
+
+```c
+  FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);      // Flash latency, caches
+```
+
+The clock source (HSI or HSE) goes through a piece of hardware called
+PLL, which multiplies source frequency by a certain value. Then, a set of
+frequency dividers are used to set the system clock and APB1, APB2 clocks.
+In order to obtain the maximum system clock of 180MHz, multiple values
+of PLL dividers and APB prescalers are possible. Section 6.3.3 of the
+datasheet tells us the maximum values for APB1 clock: <= 45MHz,
+and the APB2 clock: <= 90MHz. That narrows down the list of possible
+combinations. Here we chose the values manually. Note that tools like
+CubeMX can automate the process and make it easy and visual.
+
+```c
+enum { APB1_PRE = 5 /* AHB clock / 4 */, APB2_PRE = 4 /* AHB clock / 2 */ };
+enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 180, PLL_P = 2 };  // Run at 180 Mhz
+#define PLL_FREQ (PLL_HSI * PLL_N / PLL_M / PLL_P)
+#define FREQ (PLL_FREQ * 1000000)
+```
+
+Now we're ready for a simple algorithm to set up the clock for CPU and peripheral buses
+may look like this:
+
+- Optionally, enable FPU
+- Set flash latency
+- Decide on a clock source, and PLL, APB1 and APB2 prescalers
+- Configure RCC by setting respective values:
+
+```c
+static inline void clock_init(void) {                 // Set clock frequency
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
+  FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);      // Flash latency, caches
+  RCC->PLLCFGR &= ~((BIT(17) - 1));                   // Clear PLL multipliers
+  RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;      // Set PLL_P
+  RCC->PLLCFGR |= PLL_M | (PLL_N << 6);               // Set PLL_M and PLL_N
+  RCC->CR |= BIT(24);                                 // Enable PLL
+  while ((RCC->CR & BIT(25)) == 0) spin(1);           // Wait until done
+  RCC->CFGR = (APB1_PRE << 10) | (APB2_PRE << 13);    // Set prescalers
+  RCC->CFGR |= 2;                                     // Set clock source to PLL
+  while ((RCC->CFGR & 12) == 0) spin(1);              // Wait until done
+}
+```
+
+What is left, is to call `clock_init()` from main, then rebuild and reflash.
+And our board runs at its maximum speed, 180MHz!
+A complete project source code you can find in [step-6-clock](step-6-clock)
+
+## Web server with device dashboard
+
+The Nucleo-F429ZI comes with Ethernet on-board. Ethernet hardware needs
+two components: a PHY (which transmits/receives electrical signals to the
+media like copper, optical cable, etc) and MAC (which drives PHY controller).
+On our Nucleo, the MAC controller is built-in, and the PHY is external
+(specifically, is is Microchip's LAN8720a).
+
+MAC and PHY can talk several interfaces, we'll use RMII. For that, a bunch
+of pins must be configured to use their Alternative Function (AF).
+To implement a web server, we need 3 software components:
+- a network driver, which sends/receives Ethernet frames to/from MAC controller
+- a network stack, that parses frames and understands TCP/IP
+- a network library that understands HTTP
+
+We will use [Mongoose Network Library](https://github.com/cesanta/mongoose)
+which implements all of that in a single file. It is a dual-licensed library
+(GPLv2/commercial) that was designed to make network embedded development
+fast and easy.
+
+So, copy
+[mongoose.c](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c)
+and
+[mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h)
+to our project. Now we have a driver, a network stack, and a library at hand.
+Mongoose also provides a large set of examples, and one of them is a
+[device dashboard example](https://github.com/cesanta/mongoose/tree/master/examples/device-dashboard).
+It implements lots of things - like dashboard login, real-time data exchange
+over WebSocket, embedded file system, MQTT communication, etcetera.  So let's
+use that example. Copy two extra files:
+- [net.c](https://raw.githubusercontent.com/cesanta/mongoose/master/examples/device-dashboard/net.c) - implements dashboard functionality
+- [packed_fs.c](https://raw.githubusercontent.com/cesanta/mongoose/master/examples/device-dashboard/packed_fs.c) - contains HTML/CSS/JS GUI files
+
+What we need is to tell Mongoose which functionality to enable. That can
+be done via compilation flags, by setting preprocessor constants. Alternatively,
+the same constants can be set in the `mongoose_custom.h` file. Let's go
+the second way. Create `mongoose_custom.h` file with the following contents:
+
+```c
+#pragma once
+#define MG_ARCH MG_ARCH_NEWLIB
+#define MG_ENABLE_MIP 1
+#define MG_ENABLE_PACKED_FS 1
+#define MG_IO_SIZE 512
+#define MG_ENABLE_CUSTOM_MILLIS 1
+```
+
+Now it's time to add some networking code to main.c. We `#include "mongoose.c"`,
+initialise Ethernet RMII pins and enable Ethernet in the RCC:
+
+```c
+  uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),
+                     PIN('B', 13), PIN('C', 1),  PIN('C', 4),
+                     PIN('C', 5),  PIN('G', 11), PIN('G', 13)};
+  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
+    gpio_init(pins[i], GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_INSANE,
+              GPIO_PULL_NONE, 11);
+  }
+  nvic_enable_irq(61);                          // Setup Ethernet IRQ handler
+  RCC->APB2ENR |= BIT(14);                      // Enable SYSCFG
+  SYSCFG->PMC |= BIT(23);                       // Use RMII. Goes first!
+  RCC->AHB1ENR |= BIT(25) | BIT(26) | BIT(27);  // Enable Ethernet clocks
+  RCC->AHB1RSTR |= BIT(25);                     // ETHMAC force reset
+  RCC->AHB1RSTR &= ~BIT(25);                    // ETHMAC release reset
+```
+
+Mongoose's driver uses Ethernet interrupt, thus we need to update `startup.c`
+and add `ETH_IRQHandler` to the vector table. Let's reorganise vector table
+definition in `startup.c` in a way that does not require any modification
+to add an interrupt handler function. The idea is to use a "weak symbol"
+concept.
+
+A function can be marked "weak" and it works like a normal function.  The
+difference comes when a source code defines a function with the same name
+elsewhere. Normally, two functions with the same name make a build fail.
+However if one function is marked weak, then a build succeeds and linker
+selects a non-weak function. This gives an ability to provide a "default"
+function in a boilerplate, with an ability to override it by simply creating a
+function with the same name elsewhere in the code.
+
+Here how it works in our case. We want to fill a vector table with default
+handlers, but give user an ability to override any handler. For that, we create
+a function `DefaultIRQHandler()` and mark it weak. Then, for every IRQ handler,
+we declare a handler name and make it an alias to `DefaultIRQHandler()`:
+
+```c
+void __attribute__((weak)) DefaultIRQHandler(void) {
+  for (;;) (void) 0;
+}
+#define WEAK_ALIAS __attribute__((weak, alias("DefaultIRQHandler")))
+
+WEAK_ALIAS void NMI_Handler(void);
+WEAK_ALIAS void HardFault_Handler(void);
+WEAK_ALIAS void MemManage_Handler(void);
+...
+__attribute__((section(".vectors"))) void (*tab[16 + 91])(void) = {
+    0, _reset, NMI_Handler, HardFault_Handler, MemManage_Handler,
+    ...
+```
+
+Now, we can define any IRQ handler in our code, and it will replace the default
+one. This is what happens in our case: there is a `ETH_IRQHandler()` defined
+by the Mongoose's STM32 driver which replaces a default handler.
+
+The next step is to initialise Mongoose library: create an event manager,
+setup network driver, and start a listening HTTP connection:
+
+```c
+  struct mg_mgr mgr;        // Initialise Mongoose event manager
+  mg_mgr_init(&mgr);        // and attach it to the MIP interface
+  mg_log_set(MG_LL_DEBUG);  // Set log level
+
+  struct mip_driver_stm32 driver_data = {.mdc_cr = 4};  // See driver_stm32.h
+  struct mip_if mif = {
+      .mac = {2, 0, 1, 2, 3, 5},
+      .use_dhcp = true,
+      .driver = &mip_driver_stm32,
+      .driver_data = &driver_data,
+  };
+  mip_init(&mgr, &mif);
+  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, &mgr);
+  MG_INFO(("Init done, starting main loop"));
+```
+
+What is left, is to add a `mg_mgr_poll()` call into the main loop.
+
+Now, add `mongoose.c`, `net.c` and `packed_fs.c` files to the Makefile.
+Rebuild, reflash the board.  Attach a serial console to the debug output,
+observe that the board obtains an IP address over DHCP:
+
+```
+847 3 mongoose.c:6784:arp_cache_add     ARP cache: added 0xc0a80001 @ 90:5c:44:55:19:8b
+84e 2 mongoose.c:6817:onstatechange     READY, IP: 192.168.0.24
+854 2 mongoose.c:6818:onstatechange            GW: 192.168.0.1
+859 2 mongoose.c:6819:onstatechange            Lease: 86363 sec
+LED: 1, tick: 2262
+LED: 0, tick: 2512
+```
+
+Fire up a browser at that IP address, and get a working dashboard, with
+real-time graph over WebSocket, with MQTT, authentication, and other things!
+See
+[full description](https://github.com/cesanta/mongoose/tree/master/examples/device-dashboard)
+for more details.
+
+![Device dashboard](https://raw.githubusercontent.com/cesanta/mongoose/master/examples/device-dashboard/screenshots/dashboard.png)
+
+A complete project source code you can find in
+[step-7-webserver](step-7-webserver) directory.

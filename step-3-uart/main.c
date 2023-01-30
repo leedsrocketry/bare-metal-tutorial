@@ -16,9 +16,9 @@ static inline void spin(volatile uint32_t count) {
 }
 
 struct systick {
-  volatile uint32_t CTRL, LOAD, VAL, CALIB;
+  volatile uint32_t STCSR, STRVR, STCVR, STCR;
 };
-#define SYSTICK ((struct systick *) 0xe000e010)  // 2.2.2
+#define SYSTICK ((struct systick *) 0xe000e010)  // 4.1 System control registers
 
 struct rcc {
   volatile uint32_t CR, ICSCR, CFGR, PLLCFGR, PLLSAI1CFGR, PLLSAI2CFGR, CIER, CIFR,
@@ -30,10 +30,10 @@ struct rcc {
 
 static inline void systick_init(uint32_t ticks) {
   if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
-  SYSTICK->LOAD = ticks - 1;
-  SYSTICK->VAL = 0;
-  SYSTICK->CTRL = BIT(0) | BIT(1) | BIT(2);  // Enable systick
-  RCC->APB2ENR |= BIT(0);                   // Enable SYSCFG
+  SYSTICK->STRVR = ticks - 1;
+  SYSTICK->STCVR = 0;
+  SYSTICK->STCSR = BIT(0) | BIT(1) | BIT(2);  // Enable systick
+  RCC->APB2ENR |= BIT(0);                     // Enable SYSCFG
 }
 
 struct gpio {
@@ -128,7 +128,7 @@ int main(void) {
   uint16_t led = PIN('B', 7);                     // Blue LED
   systick_init(4000000 / 4000);                   // Tick every 1 ms
   gpio_set_mode(led, GPIO_MODE_OUTPUT);           // Set blue LED to output mode
-  uart_init(UART3, 9600);                       // Initialise UART
+  uart_init(UART3, 9600);                         // Initialise UART
   uint32_t timer, period = 500;                   // Declare timer and 500ms period
   for (;;) {
     if (timer_expired(&timer, period, s_ticks)) {
