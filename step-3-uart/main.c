@@ -64,6 +64,19 @@ static inline void gpio_write(uint16_t pin, bool val) {
   gpio->BSRR |= (1U << PINNO(pin)) << (val ? 0 : 16);
 }
 
+// The power control register
+struct pwr {
+  volatile uint32_t CR1, CR2, CR3, CR4, SR1, SR2, SCR, PUCRA, PDCRA, PUCRB, PDCRB,
+      PUCRC, PDCRC, PUCRD, PDCRD, PUCRE, PDCRE, PUCRF, PDCRF, PUCRG, PDCRG, PUCRH,
+      PDCRH, PUCRI, PDCRI, CR5;
+};
+#define PWR ((struct pwr *) 0x40007000)
+
+static inline void pwr_vdd2_init() {
+  RCC->APB1ENR1 |= BIT(28); // page 291
+  PWR->CR2 |= BIT(9); // set the IOSV bit in the PWR_CR2 page 186, 219
+}
+
 // Datasheet STM32L4 50.8.15 USART register map
 struct uart {
   volatile uint32_t CR1, CR2, CR3, BRR, GTPR, RTOR, RQR, ISR, ICR, RDR, TDR, PRESC;
@@ -73,6 +86,7 @@ struct uart {
 #define UART1 ((struct uart *) 0x40013800)
 #define UART2 ((struct uart *) 0x40004400)
 #define UART3 ((struct uart *) 0x40004800)
+#define LUART1 ((struct uart *) 0x40008000)
 
 static inline void uart_init(struct uart *uart, unsigned long baud) {
   uint8_t af = 7;           // Alternate function
@@ -81,8 +95,12 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   if (uart == UART1) RCC->APB2ENR  |= BIT(14);  // Datasheet STM32L4 page 296
   if (uart == UART2) RCC->APB1ENR1 |= BIT(17);  // Datasheet STM32L4 page 291
   if (uart == UART3) RCC->APB1ENR1 |= BIT(18);  // Datasheet STM32L4 page 291
+  if (uart == LUART1) pwr_vdd2_init(), RCC->APB1ENR2 |= BIT(0);   // Datasheet STM32L4 page 100, page 294
 
-  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); // Nucleo User Manual page 40
+  if (uart == UART1) af = 7, tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == UART2) af = 7, tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); 
+  if (uart == LUART1) af = 7, tx = PIN('G', 7), rx = PIN('G', 8);   // 5.11 LPUART1 communication board manual  page 26
 
   gpio_set_mode(tx, GPIO_MODE_AF);
   gpio_set_af(tx, af);
@@ -126,16 +144,16 @@ bool timer_expired(uint32_t *t, uint32_t prd, uint32_t now) {
 
 int main(void) {
   uint16_t led = PIN('B', 7);                     // Blue LED
-  systick_init(4000000 / 4000);                   // Tick every 1 ms
+  systick_init(4000000 / 1000);                   // Tick every 1 ms
   gpio_set_mode(led, GPIO_MODE_OUTPUT);           // Set blue LED to output mode
-  uart_init(UART3, 9600);                         // Initialise UART
+  uart_init(LUART1, 115200);                         // Initialise UART
   uint32_t timer, period = 500;                   // Declare timer and 500ms period
   for (;;) {
     if (timer_expired(&timer, period, s_ticks)) {
       static bool on;                             // This block is executed
       gpio_write(led, on);                        // Every `period` milliseconds
       on = !on;                                   // Toggle LED state
-      uart_write_buf(UART3, "hi\r\n", 4);         // Write message
+      uart_write_buf(LUART1, "hi\r\n", 4);         // Write message
     }
   }
   return 0;

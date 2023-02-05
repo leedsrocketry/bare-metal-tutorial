@@ -10,7 +10,7 @@ void SysTick_Handler(void) {
 
 int main(void) {
   uint16_t led = PIN('B', 7);            // Blue LED
-  systick_init(FREQ / 4000);             // Tick every 1 ms
+  systick_init(FREQ / 1000);             // Tick every 1 ms
   gpio_set_mode(led, GPIO_MODE_OUTPUT);  // Set blue LED to output mode
   uart_init(UART3, 9600);                // Initialise UART
   uint32_t timer = 0, period = 250;      // Declare timer and 250ms period
