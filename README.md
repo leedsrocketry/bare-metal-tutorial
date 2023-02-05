@@ -5,10 +5,11 @@ The guide covers the following topics: memory and registers, interrupt vector ta
 
 Every chapter in this guide comes with a complete source code which gradually progress in functionality and completeness. In this tutorial we'll use the Nucleo-L4R5ZI-P development board, so go ahead and download the "mcu datasheet" and the "board datasheet" for it.
 
-MCU datasheet: [here](https://www.st.com/resource/en/reference_manual/rm0432-stm32l4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
-Board datasheet: [here](https://www.st.com/resource/en/user_manual/um2179-stm32-nucleo144-boards-mb1312-stmicroelectronics.pdf)
-Arm Processor Reference Manual: [here](file:///C:/Users/Alex/Downloads/arm_cortexm4_processor_trm_100166_0001_04_en.pdf)
-Pins Alternative Functions: [here](https://web.eece.maine.edu/~zhu/book/Appendix_I_Alternate_Functions.pdf) 
+- Reference manual for the STM32L4R5: [here](https://www.st.com/resource/en/reference_manual/rm0432-stm32l4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+- Datasheet STM32L4R5: [here](https://www.st.com/resource/en/datasheet/stm32l4r5vi.pdf)
+- Board datasheet for Nucleo144: [here](https://www.st.com/resource/en/user_manual/um2179-stm32-nucleo144-boards-mb1312-stmicroelectronics.pdf)
+- Arm Processor Reference Manual: [here](https://documentation-service.arm.com/static/62053f0a0ca305732a3a5c17?token=)
+- Pins Alternative Functions: [here](https://web.eece.maine.edu/~zhu/book/Appendix_I_Alternate_Functions.pdf) 
 
 # Tools setup
 To proceed, the following tools are required:
