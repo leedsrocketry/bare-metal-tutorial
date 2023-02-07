@@ -33,7 +33,7 @@ struct rcc {
 #define RCC ((struct rcc *) 0x40021000)
 
 static inline void systick_init(uint32_t ticks) {
-  if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
+  if ((ticks - 1) > 0xffffff) return;         // Systick timer is 24 bit
   SYSTICK->STRVR = ticks - 1;
   SYSTICK->STCVR = 0;
   SYSTICK->STCSR = BIT(0) | BIT(1) | BIT(2);  // Enable systick
@@ -57,8 +57,8 @@ static inline void gpio_set_mode(uint16_t pin, uint8_t mode) {
 }
 
 static inline void gpio_set_af(uint16_t pin, uint8_t af_num) {
-  struct gpio *gpio = GPIO(PINBANK(pin));  // GPIO bank
-  int n = PINNO(pin);                       // Pin number
+  struct gpio *gpio = GPIO(PINBANK(pin));         // GPIO bank
+  int n = PINNO(pin);                             // Pin number
   gpio->AFR[n >> 3] &= ~(15UL << ((n & 7) * 4));
   gpio->AFR[n >> 3] |= ((uint32_t) af_num) << ((n & 7) * 4);
 }
@@ -68,38 +68,58 @@ static inline void gpio_write(uint16_t pin, bool val) {
   gpio->BSRR |= (1U << PINNO(pin)) << (val ? 0 : 16);
 }
 
-// Datasheet STM32L4 50.8.15 USART register map
+// The power control register
+struct pwr {
+  volatile uint32_t CR1, CR2, CR3, CR4, SR1, SR2, SCR, PUCRA, PDCRA, PUCRB, PDCRB,
+      PUCRC, PDCRC, PUCRD, PDCRD, PUCRE, PDCRE, PUCRF, PDCRF, PUCRG, PDCRG, PUCRH,
+      PDCRH, PUCRI, PDCRI, CR5;
+};
+#define PWR ((struct pwr *) 0x40007000)
+
+// Ref manual STM32L4 50.8.15 USART register map
 struct uart {
   volatile uint32_t CR1, CR2, CR3, BRR, GTPR, RTOR, RQR, ISR, ICR, RDR, TDR, PRESC;
 };
-// Datasheet STM32L4 2.2 Memory Organization
-#define UART1 ((struct uart *) 0x40011000)
+
+static inline void pwr_vdd2_init() {
+  RCC->APB1ENR1 |= BIT(28);         // page 291
+  PWR->CR2 |= BIT(9);               // set the IOSV bit in the PWR_CR2 page 186, 219
+}
+
+// Ref manual STM32L4 2.2 Memory Organization
+#define UART1 ((struct uart *) 0x40013800)
 #define UART2 ((struct uart *) 0x40004400)
 #define UART3 ((struct uart *) 0x40004800)
+#define LUART1 ((struct uart *) 0x40008000)
 
 static inline void uart_init(struct uart *uart, unsigned long baud) {
-  uint8_t af = 7;           // Alternate function
+  uint8_t af = 8;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
 
-  if (uart == UART1) RCC->APB2ENR  |= BIT(14);  // Datasheet STM32L4 page 296
-  if (uart == UART2) RCC->APB1ENR1 |= BIT(17);  // Datasheet STM32L4 page 291
-  if (uart == UART3) RCC->APB1ENR1 |= BIT(18);  // Datasheet STM32L4 page 291
+  if (uart == UART1) RCC->APB2ENR  |= BIT(14);   // Ref manual STM32L4 page  99, page 291
+  if (uart == UART2) RCC->APB1ENR1 |= BIT(17);   // Ref manual STM32L4 page 101, page 291
+  if (uart == UART3) RCC->APB1ENR1 |= BIT(18);   // Ref manual STM32L4 page 101, page 291
+  if (uart == LUART1) {
+    RCC->APB1ENR2 |= BIT(0);   // Ref manual STM32L4 page 100, page 294
+  }
 
-  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); // Nucleo User Manual page 40
-
+  if (uart == UART1) af = 7, tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == UART2) af = 7, tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); 
+  if (uart == LUART1) af = 8, tx = PIN('G', 7), rx = PIN('G', 8);   // 5.11 LPUART1 communication board manual page 26
 
   gpio_set_mode(tx, GPIO_MODE_AF);
   gpio_set_af(tx, af);
   gpio_set_mode(rx, GPIO_MODE_AF);
   gpio_set_af(rx, af);
-  uart->CR1 = 0;                           // Disable this UART
-  uart->BRR = FREQ / baud;                 // FREQ is a CPU frequency
-  uart->CR1 |= BIT(0) | BIT(2) | BIT(3);   // Set UE, RE, TE Datasheet 50.8.1 
+  uart->CR1 = 0;                                // Disable this UART                              
+  uart->BRR = 256*FREQ / baud;                  // FREQ is a CPU frequency
+  uart->CR1 |= BIT(0) | BIT(2) | BIT(3);        // Set UE, RE, TE Datasheet 50.8.1 
 }
 
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
-  uart->RDR = byte;
-  while ((uart->ISR & BIT(7)) == 0) spin(1); // Datasheet STM32L4 50.8.10 USART status register (USART_ISR)
+  uart->TDR = byte;
+  while ((uart->ISR & BIT(7)) == 0) spin(1);    // Ref manual STM32L4 50.8.10 USART status register (USART_ISR) 
 }
 
 static inline void uart_write_buf(struct uart *uart, char *buf, size_t len) {
@@ -107,7 +127,7 @@ static inline void uart_write_buf(struct uart *uart, char *buf, size_t len) {
 }
 
 static inline int uart_read_ready(struct uart *uart) {
-  return uart->ISR & BIT(5);  // If RXNE bit is set, data is ready Datasheet 50.8.10
+  return uart->ISR & BIT(5);  // If RXNE bit is set, data is ready Ref manual 50.8.10
 }
 
 static inline uint8_t uart_read_byte(struct uart *uart) {

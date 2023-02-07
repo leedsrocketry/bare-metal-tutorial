@@ -97,7 +97,6 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   if (uart == UART2) RCC->APB1ENR1 |= BIT(17);   // Ref manual STM32L4 page 101, page 291
   if (uart == UART3) RCC->APB1ENR1 |= BIT(18);   // Ref manual STM32L4 page 101, page 291
   if (uart == LUART1) {
-    pwr_vdd2_init();
     RCC->APB1ENR2 |= BIT(0);   // Ref manual STM32L4 page 100, page 294
   }
 
@@ -111,12 +110,13 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   gpio_set_mode(rx, GPIO_MODE_AF);
   gpio_set_af(rx, af);
   uart->CR1 = 0;                                // Disable this UART                              
-  uart->BRR = FREQ / baud;                      // FREQ is a CPU frequency
+  uart->BRR = 256*FREQ / baud;                  // FREQ is a CPU frequency
   uart->CR1 |= BIT(0) | BIT(2) | BIT(3);        // Set UE, RE, TE Datasheet 50.8.1 
 }
 
+
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
-  uart->RDR = byte;
+  uart->TDR = byte;
   while ((uart->ISR & BIT(7)) == 0) spin(1);    // Ref manual STM32L4 50.8.10 USART status register (USART_ISR) 
 }
 
@@ -150,21 +150,18 @@ int main(void) {
   uint16_t led = PIN('B', 7);                     // Blue LED
   systick_init(4000000 / 1000);                   // Tick every 1 ms
   gpio_set_mode(led, GPIO_MODE_OUTPUT);           // Set blue LED to output mode
-  uart_init(LUART1, 115200);                         // Initialise UART
-  uint32_t timer, period = 500;                   // Declare timer and 500ms period
-
-  // test gpio g
-  //uint16_t gpin = PIN('G', 7);
-  //pwr_vdd2_init();
-  //gpio_set_mode(gpin, GPIO_MODE_OUTPUT);          
+  
+  pwr_vdd2_init();
+  // baudrate x 3 < main clk < baudrate x 4096 
+  uart_init(LUART1, 115200);                    // Initialise UART; 
+  uint32_t timer, period = 500;                   // Declare timer and 500ms period 
 
   for (;;) {
     if (timer_expired(&timer, period, s_ticks)) {
       static bool on;                             // This block is executed
       gpio_write(led, on);                        // Every `period` milliseconds
-      //gpio_write(gpin, on);
       on = !on;                                   // Toggle LED state
-      uart_write_buf(LUART1, "hi\r\n", 4);         // Write message
+      uart_write_buf(LUART1, "hi\r\n", 4);        // Write message
     }
   }
   return 0;
