@@ -1,8 +1,17 @@
-CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
-            -Wformat-truncation -fno-common -Wconversion \
-            -g -Os -ffunction-sections -fdata-sections -I. \
-            -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(EXTRA_CFLAGS)
-LDFLAGS ?= -T link.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+CFLAGS  ?=  -g\
+			-O0\
+			-Wall\
+			-Wextra\
+			-mthumb\
+			-mno-thumb-interwork \
+			-mcpu=cortex-m4 \
+			-mfloat-abi=soft\
+			-nostartfiles\
+			-specs=nano.specs\
+			-fno-rtti\
+			-fsingle-precision-constant\
+			-fno-exceptions
+LDFLAGS ?= -T link.ld -nostartfiles -nostdlib
 SOURCES = main.c 
 
 build: firmware.elf
