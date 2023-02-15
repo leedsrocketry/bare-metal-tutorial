@@ -15,7 +15,8 @@ Every chapter in this guide comes with a complete source code which gradually pr
 To proceed, the following tools are required:
 - ARM GCC, https://launchpad.net/gcc-arm-embedded - for compiling and linking
 - GNU make, http://www.gnu.org/software/make/ - for build automation
-- ST link, https://github.com/stlink-org/stlink - for flashing
+- ST link (Windows), https://github.com/stlink-org/stlink/releases/download/v1.7.0/stlink-1.7.0-x86_64-w64-mingw32.zip - for flashing
+- OpenOCD, https://mynewt.apache.org/v1_6_0/get_started/native_install/cross_tools.html - for debug
 
 ## Setup instructions for Windows
 - Download and install gcc-arm-none-eabi-10.3-2021.10-win32.exe. Enable "Add path to environment variable" during the installation

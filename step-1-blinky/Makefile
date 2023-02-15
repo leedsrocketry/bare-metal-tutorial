@@ -18,4 +18,4 @@ flash: firmware.bin
 	st-flash --reset write $< 0x8000000
 
 clean:
-	rm -rf firmware.*
+	del -rf firmware.*

@@ -26,7 +26,7 @@ flash: firmware.bin
 	st-flash --reset write $< 0x8000000
 
 clean:
-	rm -rf firmware.*
+	del -rf firmware.*
 
 debug:
-	openocd -f "C:/Program Files/OpenOCD/scripts/interface/stlink.cfg" -f board/stm32l4discovery.cfg
+	openocd -f "C:/Program Files/OpenOCD/scripts/interface/stlink-v2-1.cfg" -f board/stm32l4discovery.cfg
