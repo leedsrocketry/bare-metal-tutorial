@@ -29,4 +29,4 @@ clean:
 	del -rf firmware.*
 
 debug:
-	openocd -f "C:/Program Files/OpenOCD/scripts/interface/stlink-v2-1.cfg" -f board/stm32l4discovery.cfg
+	openocd -f "C:/Program Files/OpenOCD/openocd/scripts/board/st_nucleo_l4.cfg
