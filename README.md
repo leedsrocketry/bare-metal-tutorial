@@ -57,8 +57,6 @@ is an LED attached to a pin: one LED contact is attached to the ground pin (GND)
 contact is attached to a signal pin via a current-limiting resistor. A firmware code can set high 
 or low voltage on a signal pin, making LED blink.
 
-<img src="images/mcu.svg" height="200" />
-
 ## Memory and registers
 The 32-bit address space of the MCU is divided by regions. For example, some region of memory 
 is mapped to the internal MCU flash at a specific address. Firmware code instructions are read 
@@ -68,8 +66,6 @@ a specific address. We can read and write any values to the RAM region.
 From STM32L4R5 datasheet, we can take a look at section 2.2.2 (Figure 3) and learn that RAM 
 region starts at address 0x20000000 and has size of 192KB. From section 2.2.2 (Figure 3) we 
 can learn that flash is mapped at address 0x08000000. Our MCU has 2MB flash.
-
-<img src="images/mem.svg" />
 
 From the datasheet we can also learn that there are many more memory regions.
 Their address ranges are given in the section 2.2.2 (Table 1) "Memory Map". 
@@ -99,8 +95,6 @@ On Nucleo-L4R5, there are several GPIO and UART peripherals.
 For example, GPIOA peripheral starts at 0x48000000, and we can find GPIO register 
 description in section 8.4.12. The datasheet says that `GPIOA_MODER` register has offset 0, that
 means that it's address is `0x48000000 + 0`, and this is the format of the register:
-
-<img src="images/moder.png" style="max-width: 100%" />
 
 The datasheet shows that the 32-bit MODER register is a collection of 2-bit
 values, 16 in total. Therefore, one MODER register controls 16 physical pins,
@@ -908,18 +902,25 @@ A complete project source code you can find in [step-2-systick](step-2-systick) 
 ## Add UART debug output
 
 Now it's time to add a human-readable diagnostics to our firmware. One of the
-MCU peripherals is a serial UART interface. Looking at the datasheet section
-2.2, we see that there are several UART/USART controllers - i.e. pieces of
-circuitry inside MCU that, properly configured, can exchange data via
+MCU peripherals is a serial UART interface. There are several UART/USART controllers 
+- i.e. pieces of circuitry inside MCU that, properly configured, can exchange data via
 certain pins. A mimimal UART setup uses two pins, RX (receive) and TX (transmit).
 
-One of the controllers, USART3, is using pins PD8 (TX) and PD9 (RX) and is connected to
-the on-board ST-LINK debugger. That means that if we configure USART3 and
-output data via the PD9 pin, we can see it on our workstation via the ST-LINK
+On the STM32L4R5, the ST-LINK is connected to LUSART1 (low power UART). As a result, the
+LUART has to be enabled in order to check data on the PC. The pins (G7 and G8) for 
+the LUSART1 are powered from a different power line compared to the rest of the UART ports,
+check the Reference Manual for STM32L4 at page 100 and page 294.
+
+LUSART1 is using pins PG7 (TX) and PG8 (RX) and is connected to
+the on-board ST-LINK debugger. That means that if we configure LUSART1 and
+output data via the PG8 pin, we can see it on our workstation via the ST-LINK
 USB connection.
 
-Thus, let us create a handy API for the UART, the way we did it for GPIO.
-Datasheet section 50.8.15 summarises UART registers - so here is our UART struct:
+Thus, let us create a handy API for the LUSART, the way we did it for GPIO.
+Datasheet section 50.8.15 summarises UART registers - so here is our UART struct 
+(NOTE: LUSART has two reserved registers compared to USART; they end up having
+a very similar structure, but it would be better to create two different structs,
+one for USART and one for LUSART):
 
 ```c
 struct uart {
@@ -930,14 +931,15 @@ struct uart {
 #define UART3 ((struct uart *) 0x40004800)
 ```
 
-To configure UART, we need to:
-- Enable UART clock by setting appropriate bit in `RCC->APB2ENR` register
+To configure LUART, we need to:
+- Give power to the G pins via the POWER control register and Vdd2 (page 291)
+- Enable UART clock by setting appropriate bit in `RCC->APB1ENR2` register
 - Set "alternate function" pin mode for RX and TX pins. There can be several
   alternate functions (AF) for any given pin, depending on the peripheral that
   is used. The AF list can be found in the
   [STM32L4R5](https://web.eece.maine.edu/~zhu/book/Appendix_I_Alternate_Functions.pdf)
   Appendix 1
-- Set baud rate (receive/transmit clock frequency) via the BRR register
+- Set baud rate (receive/transmit clock frequency) via the BRR register (ex 115200)
 - Enable the peripheral, receive and transmit via the CR1 register
 
 We already know how to set a GPIO pin into a specific mode. If a pin is in the
@@ -945,7 +947,7 @@ AF mode, we also need to specify the "function number", i.e. which exactly
 peripheral takes control. This can be done via the "alternate function register",
 `AFR`, of the GPIO peripheral. Reading the AFR register description in the
 datasheet, we can see that the AF number occupies 4 bits, thus the whole setup
-for 16 pins occupies 2 registers. If a p
+for 16 pins occupies 2 registers. 
 
 ```c
 static inline void gpio_set_af(uint16_t pin, uint8_t af_num) {
@@ -967,7 +969,7 @@ static inline void gpio_set_mode(uint16_t pin, uint8_t mode) {
   ...
 ```
 
-Now we're ready to create a UART initialization API function:
+Now we're ready to create a LUART initialization API function:
 
 ```c
 #define FREQ 4000000  // CPU frequency, 4Mhz
@@ -975,32 +977,37 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   uint8_t af = 0;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
 
-  if (uart == UART1) RCC->APB2ENR  |= BIT(14);  // Datasheet STM32L4 page 296
-  if (uart == UART2) RCC->APB1ENR1 |= BIT(17);  // Datasheet STM32L4 page 291
-  if (uart == UART3) RCC->APB1ENR1 |= BIT(18);  // Datasheet STM32L4 page 291
+  if (uart == UART1) RCC->APB2ENR  |= BIT(14);   // Ref manual STM32L4 page  99, page 291
+  if (uart == UART2) RCC->APB1ENR1 |= BIT(17);   // Ref manual STM32L4 page 101, page 291
+  if (uart == UART3) RCC->APB1ENR1 |= BIT(18);   // Ref manual STM32L4 page 101, page 291
+  if (uart == LUART1) {
+    RCC->APB1ENR2 |= BIT(0);   // Ref manual STM32L4 page 100, page 294
+  }
 
-  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); // Nucleo User Manual page 40
+  if (uart == UART1) af = 7, tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == UART2) af = 7, tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); 
+  if (uart == LUART1) af = 8, tx = PIN('G', 7), rx = PIN('G', 8);   // 5.11 LPUART1 communication board manual page 26
 
   gpio_set_mode(tx, GPIO_MODE_AF);
   gpio_set_af(tx, af);
   gpio_set_mode(rx, GPIO_MODE_AF);
   gpio_set_af(rx, af);
-  uart->CR1 = 0;                           // Disable this UART
-  uart->BRR = FREQ / baud;                 // FREQ is a CPU frequency 
-  uart->CR1 |= BIT(0) | BIT(2) | BIT(3);  // Set UE, RE, TE
+  uart->CR1 = 0;                                // Disable this UART                              
+  uart->BRR = 256*FREQ / baud;                  // FREQ is a CPU frequency
+  uart->CR1 |= BIT(0) | BIT(2) | BIT(3);        // Set UE, RE, TE Datasheet 50.8.1 
 }
 ```
 
-And, finally, functions for reading and writing to the UART.
-The datasheet section 30.6.1 tells us that the status register SR tells us
-whether data is ready:
+And, finally, functions for reading and writing to the LUART. The status
+register ISR tells us whether data is ready:
 ```c
 static inline int uart_read_ready(struct uart *uart) {
   return uart->ISR & BIT(5);  // If RXNE bit is set, data is ready Datasheet 50.8.10
 }
 ```
 
-The data byte itself can be fetched from the data register DR:
+The data byte itself can be fetched from the data register RDR:
 ```c
 static inline uint8_t uart_read_byte(struct uart *uart) {
   return (uint8_t) (uart->RDR & 255);
@@ -1012,8 +1019,8 @@ setting a byte to write, we need to wait for the transmission to end, indicated
 via bit 7 in the status register:
 ```c
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
-  uart->RDR = byte;
-  while ((uart->ISR & BIT(7)) == 0) spin(1);    // Datasheet STM32L4 50.8.10 USART status register (USART_ISR) 
+  uart->TDR = byte;
+  while ((uart->ISR & BIT(7)) == 0) spin(1);    // Ref manual STM32L4 50.8.10 USART status register (USART_ISR) 
 }
 ```
 
@@ -1024,18 +1031,35 @@ static inline void uart_write_buf(struct uart *uart, char *buf, size_t len) {
 }
 ```
 
-Now, initialise UART in our main() function:
+Remember to set Vdd2 before accessing the LUART:
+```c
+// The power control register
+struct pwr {
+  volatile uint32_t CR1, CR2, CR3, CR4, SR1, SR2, SCR, PUCRA, PDCRA, PUCRB, PDCRB,
+      PUCRC, PDCRC, PUCRD, PDCRD, PUCRE, PDCRE, PUCRF, PDCRF, PUCRG, PDCRG, PUCRH,
+      PDCRH, PUCRI, PDCRI, CR5;
+};
+#define PWR ((struct pwr *) 0x40007000)
+
+static inline void pwr_vdd2_init() {
+  RCC->APB1ENR1 |= BIT(28);         // page 291
+  PWR->CR2 |= BIT(9);               // set the IOSV bit in the PWR_CR2 page 186, 219
+}
+```
+
+Now, initialize Vdd2 and initialise LUART in our main() function:
 
 ```c
   ...
-  uart_init(UART3, 9600);              // Initialise UART
+  pwr_vdd2_init();
+  uart_init(LUART1, 115200);               // Initialise UART
 ```
 
 Now, we're ready to print a message "hi\r\n" every time LED blinks!
 ```c
     if (timer_expired(&timer, period, s_ticks)) {
       ...
-      uart_write_buf(UART3, "hi\r\n", 4);  // Write message
+      uart_write_buf(LUART1, "hi\r\n", 4);  // Write message
     }
 ```
 
@@ -1044,12 +1068,18 @@ On my Mac workstation, I use `cu`. It also can be used on Linux. On Windows,
 using `putty` utility can be a good idea. Run a terminal and see the messages:
 
 ```sh
-$ cu -l /dev/cu.YOUR_SERIAL_PORT -s 9600
+$ cu -l /dev/cu.YOUR_SERIAL_PORT -s 115200
 hi
 hi
 ```
 
+For PuTTY to work. Make sure to set the correct configuration. Go to Connection/SHH/Serial.
+Set the correct COM port (check device manager when the board is connected), baud rate 
+(115200), 8 data bits, one stop bit, no parity and no flow control.
+
 A complete project source code you can find in [step-3-uart](step-3-uart) folder.
+
+-------------------------------------------------------------------------------------------------
 
 ## Redirect printf() to UART
 
