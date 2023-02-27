@@ -57,6 +57,8 @@ is an LED attached to a pin: one LED contact is attached to the ground pin (GND)
 contact is attached to a signal pin via a current-limiting resistor. A firmware code can set high 
 or low voltage on a signal pin, making LED blink.
 
+![](images/1_LED.png)
+
 ## Memory and registers
 The 32-bit address space of the MCU is divided by regions. For example, some region of memory 
 is mapped to the internal MCU flash at a specific address. Firmware code instructions are read 
@@ -66,6 +68,8 @@ a specific address. We can read and write any values to the RAM region.
 From STM32L4R5 datasheet, we can take a look at section 2.2.2 (Figure 3) and learn that RAM 
 region starts at address 0x20000000 and has size of 192KB. From section 2.2.2 (Figure 3) we 
 can learn that flash is mapped at address 0x08000000. Our MCU has 2MB flash.
+
+![](images/2_REGISTERS.png)
 
 From the datasheet we can also learn that there are many more memory regions.
 Their address ranges are given in the section 2.2.2 (Table 1) "Memory Map". 
@@ -462,7 +466,7 @@ __attribute__((naked, noreturn)) void _reset(void) {
 
 The following diagram visualises how `_reset()` initialises .data and .bss:
 
-![](images/mem2.svg)
+![](images/4_RESET.png)
 
 The `firmware.bin` file is just a concatenation of the three sections:
 `.vectors` (IRQ vector table), `.text` (code) and `.data` (data).  Those
@@ -817,6 +821,9 @@ void SysTick_Handler(void) {
   s_ticks++;
 }
 ```
+With 4MHz clock, we init SysTick counter to trigger an interrupt every 4000 cycles: the SYSTICK->STRVR initial value is 3999, then it decrements on each cycle by 1, and when it reaches 0, an interrupt is generated. The firmware code execution gets interrupted: a SysTick_Handler() function is called to increment s_tick variable. Here how it looks like on a time scale:
+
+![](images/5_TICKS)
 
 The `volatile` specifier is required here becase `s_ticks` is modified by the
 interrupt handler. `volatile` prevents the compiler to optimise/cache `s_ticks`
@@ -1079,7 +1086,6 @@ Set the correct COM port (check device manager when the board is connected), bau
 
 A complete project source code you can find in [step-3-uart](step-3-uart) folder.
 
--------------------------------------------------------------------------------------------------
 
 ## Redirect printf() to UART
 
@@ -1112,7 +1118,7 @@ Note: STM32 Cube also uses ARM GCC with newlib, that's why Cube projects
 typically include `syscalls.c` file.  Other toolchains, like TI's CCS, Keil's
 CC, might use a different  C library with a bit different retargeting
 mechanism. We use newlib, so let's modify `_write()` syscall to print to the
-UART3.
+LUART1.
 
 Before that, let's organise our source code in the following way:
 - move all API definitions to the file `mcu.h`
@@ -1133,17 +1139,20 @@ void SysTick_Handler(void) {
 }
 
 int main(void) {
-  uint16_t led = PIN('B', 7);            // Blue LED
-  systick_init(4000000 / 4000);         // Tick every 1 ms
-  gpio_set_mode(led, GPIO_MODE_OUTPUT);  // Set blue LED to output mode
-  uart_init(UART3, 9600);              // Initialise UART
-  uint32_t timer = 0, period = 250;      // Declare timer and 250ms period
+  uint16_t led = PIN('B', 7);                     // Blue LED
+  systick_init(4000000 / 1000);                   // Tick every 1 ms
+  gpio_set_mode(led, GPIO_MODE_OUTPUT);           // Set blue LED to output mode
+  
+  pwr_vdd2_init();
+  uart_init(LUART1, 115200);                      // Initialise UART; 
+  uint32_t timer, period = 500;                   // Declare timer and 500ms period 
+
   for (;;) {
     if (timer_expired(&timer, period, s_ticks)) {
-      static bool on;                      // This block is executed
-      gpio_write(led, on);                 // Every `period` milliseconds
-      on = !on;                            // Toggle LED state
-      uart_write_buf(UART3, "hi\r\n", 4);  // Write message
+      static bool on;                             // This block is executed
+      gpio_write(led, on);                        // Every `period` milliseconds
+      on = !on;                                   // Toggle LED state
+      uart_write_buf(LUART1, "hi\r\n", 4);        // Write message
     }
     // Here we could perform other activities!
   }
@@ -1157,15 +1166,15 @@ copy/paste the following code:
 ```c
 #include "mcu.h"
 
-int _write(int fd, char *ptr, int len) {
-  (void) fd, (void) ptr, (void) len;
-  if (fd == 1) uart_write_buf(UART3, ptr, (size_t) len);
-  return -1;
+int _write(int fd, char *data, int len) {
+  (void) fd, (void) data, (void) len;
+  if (fd == 1) uart_write_buf(LUART1, data, (size_t) len);
+  return -1; 
 }
 ```
 
 Here we say: if the file descriptor we're writing to is 1 (which is a
-standard output descriptor), then write the buffer to the UART3. Otherwise,
+standard output descriptor), then write the buffer to the LUART1. Otherwise,
 ignore. This is the essence of retargeting!
 
 Rebuilding this firmware results in a bunch of linker errors:
@@ -1185,13 +1194,24 @@ of syscalls. Let's add just a simple stubs that do nothing:
 
 ```c
 int _fstat(int fd, struct stat *st) {
-  (void) fd, (void) st;
-  return -1;
+  if (fd < 0) return -1;
+  st->st_mode = S_IFCHR;
+  return 0;
 }
 
 void *_sbrk(int incr) {
-  (void) incr;
-  return NULL;
+  extern char _end;
+  static unsigned char *heap = NULL;
+  unsigned char *prev_heap;
+  if (heap == NULL) heap = (unsigned char *) &_end;
+  prev_heap = heap;
+  heap += incr;
+  return prev_heap;
+}
+
+int _open(const char *path) {
+  (void) path;
+  return -1;
 }
 
 int _close(int fd) {
@@ -1204,14 +1224,47 @@ int _isatty(int fd) {
   return 1;
 }
 
+int _lseek(int fd, int ptr, int dir) {
+  (void) fd, (void) ptr, (void) dir;
+  return 0;
+}
+
+void _exit(int status) {
+  (void) status;
+  for (;;) asm volatile("BKPT #0");
+}
+
+void _kill(int pid, int sig) {
+  (void) pid, (void) sig;
+}
+
+int _getpid(void) {
+  return -1;
+}
+
 int _read(int fd, char *ptr, int len) {
   (void) fd, (void) ptr, (void) len;
   return -1;
 }
 
-int _lseek(int fd, int ptr, int dir) {
-  (void) fd, (void) ptr, (void) dir;
-  return 0;
+int _link(const char *a, const char *b) {
+  (void) a, (void) b;
+  return -1;
+}
+
+int _unlink(const char *a) {
+  (void) a;
+  return -1;
+}
+
+int _stat(const char *path, struct stat *st) {
+  (void) path, (void) st;
+  return -1;
+}
+
+int mkdir(const char *path, mode_t mode) {
+  (void) path, (void) mode;
+  return -1;
 }
 ```
 
@@ -1236,62 +1289,55 @@ Congratulations! We learned how IO retargeting works, and
 can now printf-debug our firmware.
 A complete project source code you can find in [step-4-printf](step-4-printf) folder.
 
-## Debug with Segger Ozone
+## Debug with Visual Studio Code
 
 What if our firmware is stuck somewhere and printf debug does not work?
 What if even a startup code does not work? We would need a debugger. There
-are many options, but I'd recommend using an Ozone debugger from Segger.
-Why? Because it is stand-alone. It does not need any IDE set up. We can
-feed our `firmware.elf` directly to Ozone, and it'll pick up our source files.
+are many options, but I'd recommend debugging directly inside Visual Studio Code.
 
-So, [download Ozone](https://www.segger.com/products/development-tools/ozone-j-link-debugger/)
-from the Segger website. Before we can use it with our Nucleo board,
-we need to convert ST-LINK firmware on the onboard debugger to the jlink firmware
-that Ozone understands. Follow the [instructions](https://www.segger.com/products/debug-probes/j-link/models/other-j-links/st-link-on-board/)
-on the Segger site.
+Follow the following steps to do the setup:
 
-Now, run Ozone. Choose our device in the wizard:
+### Windows
+- Install OpenOCD (get the xpack win32-x64, which includes version 0.12) from
+[here](https://github.com/xpack-dev-tools/openocd-xpack/releases) and include the
+path to openocd to the environment variables.
+- Install ARM GNU toolchain version 12.2 from [here](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) and include the path “C:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\12.2 rel1\bin” to the environment variables.
+- Setup Visual Studio Code (VS Code) for debugging by including this launch.json file:
 
-<img src="images/ozone1.png" width="50%" />
+```sh
+{
+   "version": "0.2.0",
+   "configurations": [
+   {
+      "name": "Debug",
+      "type": "gdb",
+      "request": "launch",
+      "target": "./PATH/TO/firmware.elf",
+      "cwd":"${workspaceRoot}",
+      "gdbpath": "C:\\PATH\\TO\\Arm GNU Toolchain arm-none-eabi\\12.2 rel1\\bin\\arm-none-eabi-gdb.exe",
+      "valuesFormatting": "parseText",
+      "autorun": [
+          "target extended-remote localhost:3333",
+          "symbol-file ./PATH/TO/firmware.elf",
+          "break main"
+      ]
+   }]
+}
+```
 
-Select a debugger we're going to use - that should be a ST-LINK:
+- Include a “debug” option under the Makefile as:
 
-<img src="images/ozone2.png" width="50%" />
+```sh
+debug:
+    openocd -f "C:/PATH/TO/openocd/scripts/board/st_nucleo_l4.cfg
+```
 
-Choose our firmware.elf file:
+- Connect the Nucleo STM32L4R5 board to your PC and flash your code
+- Run “make debug”. LED4 should start flashing in red/green meaning that it is open for communications
+- Go to the debug tab in VS Code and press “Debug”
+- Happy debugging!
 
-<img src="images/ozone3.png" width="50%" />
 
-Leave the defaults on the next screen, click Finish, and we've got our
-debugger loaded (note the mcu.h source code is picked up):
-
-![](images/ozone4.png)
-
-Click the green button to download, run the firmware, and we're stopped here:
-
-![](images/ozone5.png)
-
-Now we can single-step through code, set breakpoints, and do the usual debugging
-stuff. One thing that could be noted, is a handy Ozone peripheral view:
-
-![](images/ozone6.png)
-
-Using it, we can directly examine or set the state of the peripherals. For
-example, let's turn on a green on-board LED (??):
-
-??
-1. We need to clock GPIOB first. Find Peripherals -> RCC -> AHB2ENR,
-   and enable GPIOBEN bit - set it to 1:
-  <img src="images/ozone7.png" width="75%" />
-2. Find Peripherals -> GPIO -> GPIOB -> MODER, set MODER0 to 1 (output): 
-  <img src="images/ozone8.png" width="75%" />
-3. Find Peripherals -> GPIO -> GPIOB -> ODR, set ODR0 to 1 (on): 
-  <img src="images/ozone9.png" width="75%" />
-
-Now, a green LED should be on! Happy debugging.
-??
-
---> ??
 ## Vendor CMSIS headers
 
 In the previous sections, we have developed the firmware using only datasheets,
@@ -1299,7 +1345,7 @@ editor, and GCC compiler. We have created peripheral structure definitions
 manually, using datasheets.
 
 Now as you know how it all works, it is time to introduce CMSIS headers.
-What is it ? These are header files with all definitions, created and supplied
+What is it? These are header files with all definitions, created and supplied
 by the MCU vendor. They contain definitions for everything that MCU contains,
 therefore they rather big.
 
@@ -1312,19 +1358,19 @@ headers is is a preferred way, rather than writing definitions manually.
 In this section, we will replace our API functions in the `mcu.h` by the
 CMSIS vendor header, and leave the rest of the firmware intact.
 
-STM32 CMSIS headers for F4 family can be found at
-https://github.com/STMicroelectronics/cmsis_device_f4 repo. From there,
+STM32 CMSIS headers for L4 family can be found at
+https://github.com/STMicroelectronics/cmsis_device_l4 repo. From there,
 copy the following files into our firmware directory,
 [step-5-cmsis](step-5-cmsis):
-- [stm32f429xx.h](https://raw.githubusercontent.com/STMicroelectronics/cmsis_device_f4/master/Include/stm32f429xx.h)
-- [system_stm32f4xx.h](https://raw.githubusercontent.com/STMicroelectronics/cmsis_device_f4/master/Include/system_stm32f4xx.h)
+- [stm32l4r5xx.h](https://github.com/STMicroelectronics/cmsis_device_l4/blob/master/Include/system_stm32l4xx.h)
+- [system_stm32l4xx.h](https://raw.githubusercontent.com/STMicroelectronics/cmsis_device_f4/master/Include/system_stm32l4xx.h)
 
 Those two files depend on a standard ARM CMSIS includes, download them too:
-- [core_cm4.h](https://raw.githubusercontent.com/STMicroelectronics/STM32CubeF4/master/Drivers/CMSIS/Core/Include/core_cm4.h)
-- [cmsis_gcc.h](https://raw.githubusercontent.com/STMicroelectronics/STM32CubeF4/master/Drivers/CMSIS/Core/Include/cmsis_gcc.h)
-- [cmsis_version.h](https://raw.githubusercontent.com/STMicroelectronics/STM32CubeF4/master/Drivers/CMSIS/Core/Include/cmsis_version.h)
-- [cmsis_compiler.h](https://raw.githubusercontent.com/STMicroelectronics/STM32CubeF4/master/Drivers/CMSIS/Core/Include/cmsis_compiler.h)
-- [mpu_armv7.h](https://raw.githubusercontent.com/STMicroelectronics/STM32CubeF4/master/Drivers/CMSIS/Core/Include/mpu_armv7.h)
+- [core_cm4.h](https://github.com/STMicroelectronics/STM32CubeL4/tree/master/Drivers/CMSIS/Core/Include/core_cm4.h)
+- [cmsis_gcc.h](https://github.com/STMicroelectronics/STM32CubeL4/tree/master/Drivers/CMSIS/Core/Include/cmsis_gcc.h)
+- [cmsis_version.h](https://github.com/STMicroelectronics/STM32CubeL4/tree/master/Drivers/CMSIS/Core/Include/cmsis_version.h)
+- [cmsis_compiler.h](https://github.com/STMicroelectronics/STM32CubeL4/tree/master/Drivers/CMSIS/Core/Include/cmsis_compiler.h)
+- [mpu_armv7.h](https://github.com/STMicroelectronics/STM32CubeL4/tree/master/Drivers/CMSIS/Core/Include/mpu_armv7.h)
 
 From the `mcu.h`, remove all peripheral API and definitions, and leave only
 standard C inludes, vendor CMSIS include, defines to PIN, BIT, FREQ, and
@@ -1335,13 +1381,13 @@ standard C inludes, vendor CMSIS include, defines to PIN, BIT, FREQ, and
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 
-#include "stm32f429xx.h"
+#include "stm32l4r5xx.h"
 
-#define FREQ 16000000  // CPU frequency, 16 Mhz
+#define FREQ 4000000  
 #define BIT(x) (1UL << (x))
 #define PIN(bank, num) ((((bank) - 'A') << 8) | (num))
 #define PINNO(pin) (pin & 255)
@@ -1369,27 +1415,27 @@ our `systick_init()` function remains almost unchanged: we only have to replace
 
 ```c
 static inline void systick_init(uint32_t ticks) {
-  if ((ticks - 1) > 0xffffff) return;  // Systick timer is 24 bit
+  if ((ticks - 1) > 0xffffff) return;         // Systick timer is 24 bit
   SysTick->LOAD = ticks - 1;
   SysTick->VAL = 0;
-  SysTick->CTRL = BIT(0) | BIT(1) | BIT(2);  // Enable systick
-  RCC->APB2ENR |= BIT(14);                   // Enable SYSCFG
+  SysTick->CTRL = BIT(0) | BIT(1) | BIT(2);   // Enable systick
+  RCC->APB2ENR |= BIT(0);                     // Enable SYSCFG
 }
 ```
 
-Next goes `gpio_set_mode()` function. The  `stm32f429xx.h` header has
+Next goes `gpio_set_mode()` function. The  `stm32l4r5xx.h` header has
 `GPIO_TypeDef` structure, identical to our `struct gpio`. Let's use it:
 
 ```c
-#define GPIO(bank) ((GPIO_TypeDef *) (GPIOA_BASE + 0x400 * (bank)))
+#define GPIO(bank) ((GPIO_TypeDef *) (0x48000000 + 0x400 * (bank)))
 enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
 
 static inline void gpio_set_mode(uint16_t pin, uint8_t mode) {
   GPIO_TypeDef *gpio = GPIO(PINBANK(pin));  // GPIO bank
-  int n = PINNO(pin);                      // Pin number
-  RCC->AHB1ENR |= BIT(PINBANK(pin));       // Enable GPIO clock
-  gpio->MODER &= ~(3U << (n * 2));         // Clear existing setting
-  gpio->MODER |= (mode & 3) << (n * 2);    // Set new mode
+  int n = PINNO(pin);                       // Pin number
+  RCC->AHB2ENR |= BIT(PINBANK(pin));        // Enable GPIO clock
+  gpio->MODER &= ~(3U << (n * 2));          // Clear existing setting
+  gpio->MODER |= (mode & 3U) << (n * 2);    // Set new mode
 }
 ```
 
@@ -1403,6 +1449,7 @@ USART3. Let's use them:
 #define UART1 USART1
 #define UART2 USART2
 #define UART3 USART3
+#define LUART1 LPUART1
 ```
 
 In the `uart_init()` and the rest of UART functions, change `struct uart` to

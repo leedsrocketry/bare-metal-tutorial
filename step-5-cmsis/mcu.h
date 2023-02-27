@@ -9,7 +9,7 @@
 // https://github.com/STMicroelectronics/cmsis_device_l4/blob/master/Include/system_stm32l4xx.h
 #include "stm32l4r5xx.h"
 
-#define FREQ 4000000  // CPU frequency, 4 Mhz from Ref manual 6.2.3 MSI clock
+#define FREQ 4000000  
 #define BIT(x) (1UL << (x))
 #define PIN(bank, num) ((((bank) - 'A') << 8) | (num))
 #define PINNO(pin) (pin & 255)

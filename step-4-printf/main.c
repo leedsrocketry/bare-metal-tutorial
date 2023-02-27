@@ -7,7 +7,7 @@ void SysTick_Handler(void) {
 
 int main(void) {
   uint16_t led = PIN('B', 7);                         // Blue LED
-  systick_init(FREQ / 1000);                       // Tick every 1 ms
+  systick_init(FREQ / 1000);                          // Tick every 1 ms
   gpio_set_mode(led, GPIO_MODE_OUTPUT);               // Set blue LED to output mode
   
   pwr_vdd2_init();
@@ -19,7 +19,7 @@ int main(void) {
       static bool on;                                 // This block is executed
       gpio_write(led, on);                            // Every `period` milliseconds
       on = !on;                                       // Toggle LED state
-      printf("pe\r\n");  // Write message
+      printf("LED: %d, tick: %lu\r\n", on, s_ticks);  // Write message
     }
   }
   return 0;
