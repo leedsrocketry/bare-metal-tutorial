@@ -19,20 +19,9 @@ To proceed, the following tools are required:
 - [OpenOCD 0.12](https://github.com/xpack-dev-tools/openocd-xpack/releases) - for debug
 
 ## Setup instructions for Windows
-- Download and install gcc-arm-none-eabi-10.3-2021.10-win32.exe. Enable "Add path to environment variable" during the installation
-- Create c:\tools folder
-- Download stlink-1.7.0-x86_64-w64-mingw32.zip and unpack bin/st-flash.exe into c:\tools
-- Download make-4.4-without-guile-w32-bin.zip and unpack bin/make.exe into c:\tools
-- Add c:\tools to the Path environment variable
-- Verify installation:
- - Download and unzip this repository into c:\
- - Start command prompt, and execute the following: 
-```
-C:\Users\YOURNAME> cd \
-C:\> cd bare-metal-programming-guide-main\step-0-minimal
-C:\bare-metal-programming-guide-main\step-0-minimal> make
-arm-none-eabi-gcc main.c  -W -Wall -Wextra -Werror ...
-```
+- Download and install ARM GNU Toolchain 12.2. Enable "Add path to environment variable" during the installation
+- Download the latest STlink and include the path to bin/st-flash.exe to environment variables
+- Download GnuWin32 make and include the path to bin/make.exe to environment variables
 
 ## Setup instructions for Mac
 Start a terminal, and execute:
