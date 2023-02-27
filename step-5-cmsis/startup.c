@@ -1,6 +1,3 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 // Startup code
 __attribute__((naked, noreturn)) void _reset(void) {
   // Initialise memory
@@ -17,6 +14,6 @@ __attribute__((naked, noreturn)) void _reset(void) {
 extern void SysTick_Handler(void);  // Defined in main.c
 extern void _estack(void);          // Defined in link.ld
 
-// 16 standard and 91 STM32-specific handlers
-__attribute__((section(".vectors"))) void (*tab[16 + 91])(void) = {
+// 16 standard and 95 STM32-specific handlers
+__attribute__((section(".vectors"))) void (*tab[16 + 95])(void) = {
     _estack, _reset, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, SysTick_Handler};

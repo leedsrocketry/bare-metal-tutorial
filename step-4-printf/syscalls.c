@@ -1,9 +1,7 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
-#include <sys/stat.h>
-
 #include "mcu.h"
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 int _fstat(int fd, struct stat *st) {
   if (fd < 0) return -1;
@@ -54,12 +52,6 @@ int _getpid(void) {
   return -1;
 }
 
-int _write(int fd, char *ptr, int len) {
-  (void) fd, (void) ptr, (void) len;
-  if (fd == 1) uart_write_buf(UART3, ptr, (size_t) len);
-  return -1;
-}
-
 int _read(int fd, char *ptr, int len) {
   (void) fd, (void) ptr, (void) len;
   return -1;
@@ -83,4 +75,10 @@ int _stat(const char *path, struct stat *st) {
 int mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
+}
+
+int _write(int fd, char *data, int len) {
+  (void) fd, (void) data, (void) len;
+  if (fd == 1) uart_write_buf(LUART1, data, (size_t) len);
+  return -1; 
 }

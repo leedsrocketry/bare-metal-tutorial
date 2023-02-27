@@ -1,6 +1,3 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 #pragma once
 
 #include <inttypes.h>
@@ -56,27 +53,35 @@ static inline void gpio_write(uint16_t pin, bool val) {
 #define UART1 USART1
 #define UART2 USART2
 #define UART3 USART3
+#define LUART1 LPUART1
 
 static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
   uint8_t af = 0;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
   
-  if (uart == UART1) RCC->APB2ENR  |= BIT(14);  // Datasheet STM32L4 page 296
-  if (uart == UART2) RCC->APB1ENR1 |= BIT(17);  // Datasheet STM32L4 page 291
-  if (uart == UART3) RCC->APB1ENR1 |= BIT(18);  // Datasheet STM32L4 page 291
-  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); // Nucleo User Manual page 40
+  if (uart == UART1) RCC->APB2ENR  |= BIT(14); 
+  if (uart == UART2) RCC->APB1ENR1 |= BIT(17); 
+  if (uart == UART3) RCC->APB1ENR1 |= BIT(18); 
+  if (uart == LUART1) {
+    RCC->APB1ENR2 |= BIT(0);   
+  }
+
+  if (uart == UART1) af = 7, tx = PIN('A', 9), rx = PIN('A', 10);
+  if (uart == UART2) af = 7, tx = PIN('A', 2), rx = PIN('A', 3);
+  if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); 
+  if (uart == LUART1) af = 8, tx = PIN('G', 7), rx = PIN('G', 8);
 
   gpio_set_mode(tx, GPIO_MODE_AF);
   gpio_set_af(tx, af);
   gpio_set_mode(rx, GPIO_MODE_AF);
   gpio_set_af(rx, af);
   uart->CR1 = 0;                            // Disable this UART
-  uart->BRR = FREQ / baud;                  // FREQ is a CPU frequency
+  uart->BRR = 256*FREQ / baud;              // FREQ is a CPU frequency
   uart->CR1 |= BIT(0) | BIT(2) | BIT(3);    // Set UE, RE, TE
 }
 
 static inline void uart_write_byte(USART_TypeDef *uart, uint8_t byte) {
-  uart->RDR = byte;
+  uart->TDR = byte;
   while ((uart->ISR & BIT(7)) == 0) spin(1); // Datasheet STM32L4 50.8.10 USART status register (USART_ISR)
 }
 

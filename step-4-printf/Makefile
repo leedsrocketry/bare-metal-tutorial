@@ -2,10 +2,10 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
             -Wformat-truncation -fno-common -Wconversion \
             -g3 -Os -ffunction-sections -fdata-sections -I. \
             -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(EXTRA_CFLAGS)
-LDFLAGS ?= -T link.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 SOURCES = main.c startup.c syscalls.c
 
-build: firmware.elf
+build: firmware.bin
 
 firmware.elf: $(SOURCES)
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
@@ -18,3 +18,6 @@ flash: firmware.bin
 
 clean:
 	del -rf firmware.*
+
+debug:
+	openocd -f "C:/Program Files/OpenOCD/openocd/scripts/board/st_nucleo_l4.cfg

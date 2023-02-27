@@ -1,6 +1,3 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 #pragma once
 
 #include <inttypes.h>
@@ -9,7 +6,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#define FREQ 4000000  // CPU frequency, 4 Mhz
+#define FREQ 4000000  // CPU frequency, 4 Mhz from Ref manual 6.2.3 MSI clock
 #define BIT(x) (1UL << (x))
 #define PIN(bank, num) ((((bank) - 'A') << 8) | (num))
 #define PINNO(pin) (pin & 255)
@@ -50,15 +47,15 @@ enum { GPIO_MODE_INPUT, GPIO_MODE_OUTPUT, GPIO_MODE_AF, GPIO_MODE_ANALOG };
 
 static inline void gpio_set_mode(uint16_t pin, uint8_t mode) {
   struct gpio *gpio = GPIO(PINBANK(pin));  // GPIO bank
-  int n = PINNO(pin);                       // Pin number
-  RCC->AHB1ENR |= BIT(PINBANK(pin));        // Enable GPIO clock
-  gpio->MODER &= ~(3U << (n * 2));          // Clear existing setting
-  gpio->MODER |= (mode & 3U) << (n * 2);    // Set new mode
+  int n = PINNO(pin);                      // Pin number
+  RCC->AHB2ENR |= BIT(PINBANK(pin));       // Enable GPIO clock
+  gpio->MODER &= ~(3U << (n * 2));         // Clear existing setting
+  gpio->MODER |= (mode & 3U) << (n * 2);   // Set new mode
 }
 
 static inline void gpio_set_af(uint16_t pin, uint8_t af_num) {
-  struct gpio *gpio = GPIO(PINBANK(pin));         // GPIO bank
-  int n = PINNO(pin);                             // Pin number
+  struct gpio *gpio = GPIO(PINBANK(pin));  // GPIO bank
+  int n = PINNO(pin);                      // Pin number
   gpio->AFR[n >> 3] &= ~(15UL << ((n & 7) * 4));
   gpio->AFR[n >> 3] |= ((uint32_t) af_num) << ((n & 7) * 4);
 }
@@ -116,6 +113,7 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   uart->BRR = 256*FREQ / baud;                  // FREQ is a CPU frequency
   uart->CR1 |= BIT(0) | BIT(2) | BIT(3);        // Set UE, RE, TE Datasheet 50.8.1 
 }
+
 
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
   uart->TDR = byte;

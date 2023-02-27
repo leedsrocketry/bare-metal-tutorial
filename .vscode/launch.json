@@ -8,13 +8,13 @@
             "name": "Debug",
             "type": "gdb",
             "request": "launch",
-            "target": "./step-3-uart/firmware.elf",
+            "target": "./step-4-printf/firmware.elf",
             "cwd": "${workspaceRoot}",
             "gdbpath": "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\12.2 rel1\\bin\\arm-none-eabi-gdb.exe",
             "valuesFormatting": "parseText",
             "autorun": [
                 "target extended-remote localhost:3333",
-                "symbol-file ./step-3-uart/firmware.elf",
+                "symbol-file ./step-4-printf/firmware.elf",
                 "break main"
             ]
         }

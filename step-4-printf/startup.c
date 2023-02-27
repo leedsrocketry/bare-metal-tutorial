@@ -1,6 +1,3 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 // Startup code
 __attribute__((naked, noreturn)) void _reset(void) {
   // Initialise memory

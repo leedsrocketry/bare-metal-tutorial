@@ -1,6 +1,3 @@
-// Copyright (c) 2022 Cesanta Software Limited
-// All rights reserved
-
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -96,10 +93,10 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
   if (uart == UART1) RCC->APB2ENR  |= BIT(14);   // Ref manual STM32L4 page  99, page 291
   if (uart == UART2) RCC->APB1ENR1 |= BIT(17);   // Ref manual STM32L4 page 101, page 291
   if (uart == UART3) RCC->APB1ENR1 |= BIT(18);   // Ref manual STM32L4 page 101, page 291
-  if (uart == LUART1) {
+  
+if (uart == LUART1) {
     RCC->APB1ENR2 |= BIT(0);   // Ref manual STM32L4 page 100, page 294
   }
-
   if (uart == UART1) af = 7, tx = PIN('A', 9), rx = PIN('A', 10);
   if (uart == UART2) af = 7, tx = PIN('A', 2), rx = PIN('A', 3);
   if (uart == UART3) af = 7, tx = PIN('D', 8), rx = PIN('D', 9); 
